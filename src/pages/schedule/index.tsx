@@ -1,4 +1,4 @@
-import { DashTopBar } from '../../components/layout/DashTopBar';
+import { DashTopBar } from '../../components/layout/top-bar';
 import { Ic } from '../../components/icons';
 
 export default function SchedulePage() {

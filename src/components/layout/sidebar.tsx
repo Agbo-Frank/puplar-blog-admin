@@ -1,5 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { Ic } from '../icons';
+import { Logo } from '../material';
 
 interface NavItem {
   id: string;
@@ -10,12 +11,11 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { id: 'overview',  label: 'Overview',    icon: Ic.Chart,    route: '/overview' },
-  { id: 'posts',     label: 'Posts',       icon: Ic.Doc,      route: '/posts',    badge: '9' },
-  { id: 'media',     label: 'Media',       icon: Ic.Image,    route: '/media' },
-  { id: 'taxonomy',  label: 'Categories',  icon: Ic.Folder,   route: '/taxonomy' },
-  { id: 'tags',      label: 'Tags',        icon: Ic.Tag,      route: '/taxonomy' },
-  { id: 'schedule',  label: 'Schedule',    icon: Ic.Calendar, route: '/schedule' },
+  { id: 'overview', label: 'Overview', icon: Ic.Chart, route: '/overview' },
+  { id: 'posts', label: 'Posts', icon: Ic.Doc, route: '/posts', badge: '9' },
+  { id: 'media', label: 'Media', icon: Ic.Image, route: '/media' },
+  { id: 'taxonomy', label: 'Categories', icon: Ic.Folder, route: '/taxonomy' },
+  { id: 'schedule', label: 'Schedule', icon: Ic.Calendar, route: '/schedule' },
 ];
 
 interface DashSidebarProps {
@@ -35,15 +35,10 @@ export function DashSidebar({ collapsed = false, onCollapse }: DashSidebarProps)
         onClick={onCollapse}
         title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
       >
-        <div className="flex items-center gap-2 text-puplar-700">
-          <Ic.Logo className="w-7 h-7 shrink-0" />
-          {!collapsed && (
-            <div className="flex flex-col leading-tight">
-              <span className="font-display font-bold text-[15px] tracking-[-0.01em] text-stone-900">puplar</span>
-              <span className="text-[10px] font-mono uppercase tracking-[0.1em] text-stone-500">blog studio</span>
-            </div>
-          )}
-        </div>
+        {collapsed
+          ? <Ic.Logo className="w-6 h-6 shrink-0 text-puplar-700" />
+          : <Logo color="dark" className="h-7" />
+        }
       </div>
 
       {/* New post button */}
@@ -67,11 +62,10 @@ export function DashSidebar({ collapsed = false, onCollapse }: DashSidebarProps)
               key={item.id}
               to={item.route}
               title={collapsed ? item.label : undefined}
-              className={`flex items-center gap-2.5 ${collapsed ? 'justify-center px-2' : 'px-2.5'} py-2 rounded-md text-[13px] font-medium transition ${
-                isActive
+              className={`flex items-center gap-2.5 ${collapsed ? 'justify-center px-2' : 'px-2.5'} py-2 rounded-md text-[13px] font-medium transition ${isActive
                   ? 'bg-stone-100 text-stone-900'
                   : 'text-stone-600 hover:bg-stone-50 hover:text-stone-900'
-              }`}
+                }`}
             >
               <Icon className="w-4 h-4 shrink-0" />
               {!collapsed && (

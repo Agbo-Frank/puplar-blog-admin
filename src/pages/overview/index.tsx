@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { DashTopBar } from '../../components/layout/DashTopBar';
+import { DashTopBar } from '../../components/layout/top-bar';
 import { DASH_POSTS } from '../../data/admin';
 
 const PERIODS = ['7d', '30d', '90d', 'All'];
@@ -37,10 +37,10 @@ export default function OverviewPage() {
   );
 
   const stats = [
-    { k: 'Total views',   v: '284k',  d: '+18% MoM',  color: 'text-emerald-700' },
-    { k: 'Avg read time', v: '4:12',  d: '+0:21',     color: 'text-emerald-700' },
-    { k: 'Subscribers',   v: '9,142', d: '+312 / mo', color: 'text-stone-900'   },
-    { k: 'Bounce',        v: '31%',   d: '-2.3pp',    color: 'text-emerald-700' },
+    { k: 'Total views', v: '284k', d: '+18% MoM', color: 'text-emerald-700' },
+    { k: 'Avg read time', v: '4:12', d: '+0:21', color: 'text-emerald-700' },
+    { k: 'Subscribers', v: '9,142', d: '+312 / mo', color: 'text-stone-900' },
+    { k: 'Bounce', v: '31%', d: '-2.3pp', color: 'text-emerald-700' },
   ];
 
   return (

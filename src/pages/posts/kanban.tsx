@@ -1,13 +1,13 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { DashTopBar } from '../../components/layout/DashTopBar';
+import { DashTopBar } from '../../components/layout/top-bar';
 import { Ic } from '../../components/icons';
 import { Avatar, Thumb } from '../../components/material';
 import { DASH_POSTS, STATUS_META } from '../../data/admin';
 import type { PostStatus } from '../../types/admin';
 
 const COLUMNS: { id: PostStatus; label: string }[] = [
-  { id: 'draft',     label: 'Draft' },
-  { id: 'review',    label: 'In review' },
+  { id: 'draft', label: 'Draft' },
+  { id: 'review', label: 'In review' },
   { id: 'scheduled', label: 'Scheduled' },
   { id: 'published', label: 'Published' },
 ];

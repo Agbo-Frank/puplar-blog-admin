@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { DashTopBar } from '../../components/layout/DashTopBar';
+import { DashTopBar } from '../../components/layout/top-bar';
 import { Ic } from '../../components/icons';
 import { StatusPill, Avatar, Thumb } from '../../components/material';
 import { ImportModal } from '../../components/material/ImportModal';

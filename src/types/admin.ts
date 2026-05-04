@@ -38,3 +38,9 @@ export interface StatusMeta {
   label: string;
   chip: string;
 }
+
+export interface HistoryEntry {
+  who: string;
+  action: string;
+  t: string;
+}

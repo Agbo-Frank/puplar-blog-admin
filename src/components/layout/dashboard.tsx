@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Outlet } from 'react-router-dom';
-import { DashSidebar } from './DashSidebar';
+import { DashSidebar } from './sidebar';
 
 export default function DashboardLayout() {
   const [collapsed, setCollapsed] = useState(false);
