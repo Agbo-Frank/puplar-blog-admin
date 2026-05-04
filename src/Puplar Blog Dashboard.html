@@ -1,0 +1,1681 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Puplar · Blog Studio</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        fontFamily: {
+          display: ['"DM Sans"', "system-ui", "sans-serif"],
+          body:    ["Inter", "system-ui", "sans-serif"],
+          mono:    ['"JetBrains Mono"', "ui-monospace", "monospace"],
+        },
+        colors: {
+          puplar: { 700: "#0f766e", 900: "#134e4a" },
+        },
+      },
+    },
+  };
+</script>
+
+<style>
+  body { font-family: Inter, system-ui, sans-serif; margin: 0; background: #f0eee9; }
+  .font-display { font-family: "DM Sans", system-ui, sans-serif; letter-spacing: -0.005em; }
+  .artboard ::-webkit-scrollbar { width: 8px; height: 8px; }
+  .artboard ::-webkit-scrollbar-thumb { background: #d6d3d1; border-radius: 4px; }
+  .artboard ::-webkit-scrollbar-track { background: transparent; }
+</style>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" data-presets="react">
+/* design-canvas */
+
+// DesignCanvas.jsx — Figma-ish design canvas wrapper
+// Warm gray grid bg + Sections + Artboards + PostIt notes.
+// Artboards are reorderable (grip-drag), labels/titles are inline-editable,
+// and any artboard can be opened in a fullscreen focus overlay (←/→/Esc).
+// State persists to a .design-canvas.state.json sidecar via the host
+// bridge. No assets, no deps.
+//
+// Usage:
+//   <DesignCanvas>
+//     <DCSection id="onboarding" title="Onboarding" subtitle="First-run variants">
+//       <DCArtboard id="a" label="A · Dusk" width={260} height={480}>…</DCArtboard>
+//       <DCArtboard id="b" label="B · Minimal" width={260} height={480}>…</DCArtboard>
+//     </DCSection>
+//   </DesignCanvas>
+
+const DC = {
+  bg: '#f0eee9',
+  grid: 'rgba(0,0,0,0.06)',
+  label: 'rgba(60,50,40,0.7)',
+  title: 'rgba(40,30,20,0.85)',
+  subtitle: 'rgba(60,50,40,0.6)',
+  postitBg: '#fef4a8',
+  postitText: '#5a4a2a',
+  font: '-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
+};
+
+// One-time CSS injection (classes are dc-prefixed so they don't collide with
+// the hosted design's own styles).
+if (typeof document !== 'undefined' && !document.getElementById('dc-styles')) {
+  const s = document.createElement('style');
+  s.id = 'dc-styles';
+  s.textContent = [
+    '.dc-editable{cursor:text;outline:none;white-space:nowrap;border-radius:3px;padding:0 2px;margin:0 -2px}',
+    '.dc-editable:focus{background:#fff;box-shadow:0 0 0 1.5px #c96442}',
+    '[data-dc-slot]{transition:transform .18s cubic-bezier(.2,.7,.3,1)}',
+    '[data-dc-slot].dc-dragging{transition:none;z-index:10;pointer-events:none}',
+    '[data-dc-slot].dc-dragging .dc-card{box-shadow:0 12px 40px rgba(0,0,0,.25),0 0 0 2px #c96442;transform:scale(1.02)}',
+    '.dc-card{transition:box-shadow .15s,transform .15s}',
+    '.dc-card *{scrollbar-width:none}',
+    '.dc-card *::-webkit-scrollbar{display:none}',
+    '.dc-labelrow{display:flex;align-items:center;gap:4px;height:24px}',
+    '.dc-grip{cursor:grab;display:flex;align-items:center;padding:5px 4px;border-radius:4px;transition:background .12s}',
+    '.dc-grip:hover{background:rgba(0,0,0,.08)}',
+    '.dc-grip:active{cursor:grabbing}',
+    '.dc-labeltext{cursor:pointer;border-radius:4px;padding:3px 6px;display:flex;align-items:center;transition:background .12s}',
+    '.dc-labeltext:hover{background:rgba(0,0,0,.05)}',
+    '.dc-expand{position:absolute;bottom:100%;right:0;margin-bottom:5px;z-index:2;opacity:0;transition:opacity .12s,background .12s;',
+    '  width:22px;height:22px;border-radius:5px;border:none;cursor:pointer;padding:0;',
+    '  background:transparent;color:rgba(60,50,40,.7);display:flex;align-items:center;justify-content:center}',
+    '.dc-expand:hover{background:rgba(0,0,0,.06);color:#2a251f}',
+    '[data-dc-slot]:hover .dc-expand{opacity:1}',
+  ].join('\n');
+  document.head.appendChild(s);
+}
+
+const DCCtx = React.createContext(null);
+
+// ─────────────────────────────────────────────────────────────
+// DesignCanvas — stateful wrapper around the pan/zoom viewport.
+// Owns runtime state (per-section order, renamed titles/labels, focused
+// artboard). Order/titles/labels persist to a .design-canvas.state.json
+// sidecar next to the HTML. Reads go via plain fetch() so the saved
+// arrangement is visible anywhere the HTML + sidecar are served together
+// (omelette preview, direct link, downloaded zip). Writes go through the
+// host's window.omelette bridge — editing requires the omelette runtime.
+// Focus is ephemeral.
+// ─────────────────────────────────────────────────────────────
+const DC_STATE_FILE = '.design-canvas.state.json';
+
+function DesignCanvas({ children, minScale, maxScale, style }) {
+  const [state, setState] = React.useState({ sections: {}, focus: null });
+  // Hold rendering until the sidecar read settles so the saved order/titles
+  // appear on first paint (no source-order flash). didRead gates writes until
+  // the read settles so the empty initial state can't clobber a slow read;
+  // skipNextWrite suppresses the one echo-write that would otherwise follow
+  // hydration.
+  const [ready, setReady] = React.useState(false);
+  const didRead = React.useRef(false);
+  const skipNextWrite = React.useRef(false);
+
+  React.useEffect(() => {
+    let off = false;
+    fetch('./' + DC_STATE_FILE)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((saved) => {
+        if (off || !saved || !saved.sections) return;
+        skipNextWrite.current = true;
+        setState((s) => ({ ...s, sections: saved.sections }));
+      })
+      .catch(() => {})
+      .finally(() => { didRead.current = true; if (!off) setReady(true); });
+    const t = setTimeout(() => { if (!off) setReady(true); }, 150);
+    return () => { off = true; clearTimeout(t); };
+  }, []);
+
+  React.useEffect(() => {
+    if (!didRead.current) return;
+    if (skipNextWrite.current) { skipNextWrite.current = false; return; }
+    const t = setTimeout(() => {
+      window.omelette?.writeFile(DC_STATE_FILE, JSON.stringify({ sections: state.sections })).catch(() => {});
+    }, 250);
+    return () => clearTimeout(t);
+  }, [state.sections]);
+
+  // Build registries synchronously from children so FocusOverlay can read
+  // them in the same render. Only direct DCSection > DCArtboard children are
+  // walked — wrapping them in other elements opts out of focus/reorder.
+  const registry = {};     // slotId -> { sectionId, artboard }
+  const sectionMeta = {};  // sectionId -> { title, subtitle, slotIds[] }
+  const sectionOrder = [];
+  React.Children.forEach(children, (sec) => {
+    if (!sec || sec.type !== DCSection) return;
+    const sid = sec.props.id ?? sec.props.title;
+    if (!sid) return;
+    sectionOrder.push(sid);
+    const persisted = state.sections[sid] || {};
+    const srcIds = [];
+    React.Children.forEach(sec.props.children, (ab) => {
+      if (!ab || ab.type !== DCArtboard) return;
+      const aid = ab.props.id ?? ab.props.label;
+      if (!aid) return;
+      registry[`${sid}/${aid}`] = { sectionId: sid, artboard: ab };
+      srcIds.push(aid);
+    });
+    const kept = (persisted.order || []).filter((k) => srcIds.includes(k));
+    sectionMeta[sid] = {
+      title: persisted.title ?? sec.props.title,
+      subtitle: sec.props.subtitle,
+      slotIds: [...kept, ...srcIds.filter((k) => !kept.includes(k))],
+    };
+  });
+
+  const api = React.useMemo(() => ({
+    state,
+    section: (id) => state.sections[id] || {},
+    patchSection: (id, p) => setState((s) => ({
+      ...s,
+      sections: { ...s.sections, [id]: { ...s.sections[id], ...(typeof p === 'function' ? p(s.sections[id] || {}) : p) } },
+    })),
+    setFocus: (slotId) => setState((s) => ({ ...s, focus: slotId })),
+  }), [state]);
+
+  // Esc exits focus; any outside pointerdown commits an in-progress rename.
+  React.useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') api.setFocus(null); };
+    const onPd = (e) => {
+      const ae = document.activeElement;
+      if (ae && ae.isContentEditable && !ae.contains(e.target)) ae.blur();
+    };
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('pointerdown', onPd, true);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('pointerdown', onPd, true);
+    };
+  }, [api]);
+
+  return (
+    <DCCtx.Provider value={api}>
+      <DCViewport minScale={minScale} maxScale={maxScale} style={style}>{ready && children}</DCViewport>
+      {state.focus && registry[state.focus] && (
+        <DCFocusOverlay entry={registry[state.focus]} sectionMeta={sectionMeta} sectionOrder={sectionOrder} />
+      )}
+    </DCCtx.Provider>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// DCViewport — transform-based pan/zoom (internal)
+//
+// Input mapping (Figma-style):
+//   • trackpad pinch  → zoom   (ctrlKey wheel; Safari gesture* events)
+//   • trackpad scroll → pan    (two-finger)
+//   • mouse wheel     → zoom   (notched; distinguished from trackpad scroll)
+//   • middle-drag / primary-drag-on-bg → pan
+//
+// Transform state lives in a ref and is written straight to the DOM
+// (translate3d + will-change) so wheel ticks don't go through React —
+// keeps pans at 60fps on dense canvases.
+// ─────────────────────────────────────────────────────────────
+function DCViewport({ children, minScale = 0.1, maxScale = 8, style = {} }) {
+  const vpRef = React.useRef(null);
+  const worldRef = React.useRef(null);
+  const tf = React.useRef({ x: 0, y: 0, scale: 1 });
+
+  const apply = React.useCallback(() => {
+    const { x, y, scale } = tf.current;
+    const el = worldRef.current;
+    if (el) el.style.transform = `translate3d(${x}px, ${y}px, 0) scale(${scale})`;
+  }, []);
+
+  React.useEffect(() => {
+    const vp = vpRef.current;
+    if (!vp) return;
+
+    const zoomAt = (cx, cy, factor) => {
+      const r = vp.getBoundingClientRect();
+      const px = cx - r.left, py = cy - r.top;
+      const t = tf.current;
+      const next = Math.min(maxScale, Math.max(minScale, t.scale * factor));
+      const k = next / t.scale;
+      // keep the world point under the cursor fixed
+      t.x = px - (px - t.x) * k;
+      t.y = py - (py - t.y) * k;
+      t.scale = next;
+      apply();
+    };
+
+    // Mouse-wheel vs trackpad-scroll heuristic. A physical wheel sends
+    // line-mode deltas (Firefox) or large integer pixel deltas with no X
+    // component (Chrome/Safari, typically multiples of 100/120). Trackpad
+    // two-finger scroll sends small/fractional pixel deltas, often with
+    // non-zero deltaX. ctrlKey is set by the browser for trackpad pinch.
+    const isMouseWheel = (e) =>
+      e.deltaMode !== 0 ||
+      (e.deltaX === 0 && Number.isInteger(e.deltaY) && Math.abs(e.deltaY) >= 40);
+
+    const onWheel = (e) => {
+      e.preventDefault();
+      if (isGesturing) return; // Safari: gesture* owns the pinch — discard concurrent wheels
+      if (e.ctrlKey) {
+        // trackpad pinch (or explicit ctrl+wheel)
+        zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY * 0.01));
+      } else if (isMouseWheel(e)) {
+        // notched mouse wheel — fixed-ratio step per click
+        zoomAt(e.clientX, e.clientY, Math.exp(-Math.sign(e.deltaY) * 0.18));
+      } else {
+        // trackpad two-finger scroll — pan
+        tf.current.x -= e.deltaX;
+        tf.current.y -= e.deltaY;
+        apply();
+      }
+    };
+
+    // Safari sends native gesture* events for trackpad pinch with a smooth
+    // e.scale; preferring these over the ctrl+wheel fallback gives a much
+    // better feel there. No-ops on other browsers. Safari also fires
+    // ctrlKey wheel events during the same pinch — isGesturing makes
+    // onWheel drop those entirely so they neither zoom nor pan.
+    let gsBase = 1;
+    let isGesturing = false;
+    const onGestureStart = (e) => { e.preventDefault(); isGesturing = true; gsBase = tf.current.scale; };
+    const onGestureChange = (e) => {
+      e.preventDefault();
+      zoomAt(e.clientX, e.clientY, (gsBase * e.scale) / tf.current.scale);
+    };
+    const onGestureEnd = (e) => { e.preventDefault(); isGesturing = false; };
+
+    // Drag-pan: middle button anywhere, or primary button on canvas
+    // background (anything that isn't an artboard or an inline editor).
+    let drag = null;
+    const onPointerDown = (e) => {
+      const onBg = !e.target.closest('[data-dc-slot], .dc-editable');
+      if (!(e.button === 1 || (e.button === 0 && onBg))) return;
+      e.preventDefault();
+      vp.setPointerCapture(e.pointerId);
+      drag = { id: e.pointerId, lx: e.clientX, ly: e.clientY };
+      vp.style.cursor = 'grabbing';
+    };
+    const onPointerMove = (e) => {
+      if (!drag || e.pointerId !== drag.id) return;
+      tf.current.x += e.clientX - drag.lx;
+      tf.current.y += e.clientY - drag.ly;
+      drag.lx = e.clientX; drag.ly = e.clientY;
+      apply();
+    };
+    const onPointerUp = (e) => {
+      if (!drag || e.pointerId !== drag.id) return;
+      vp.releasePointerCapture(e.pointerId);
+      drag = null;
+      vp.style.cursor = '';
+    };
+
+    vp.addEventListener('wheel', onWheel, { passive: false });
+    vp.addEventListener('gesturestart', onGestureStart, { passive: false });
+    vp.addEventListener('gesturechange', onGestureChange, { passive: false });
+    vp.addEventListener('gestureend', onGestureEnd, { passive: false });
+    vp.addEventListener('pointerdown', onPointerDown);
+    vp.addEventListener('pointermove', onPointerMove);
+    vp.addEventListener('pointerup', onPointerUp);
+    vp.addEventListener('pointercancel', onPointerUp);
+    return () => {
+      vp.removeEventListener('wheel', onWheel);
+      vp.removeEventListener('gesturestart', onGestureStart);
+      vp.removeEventListener('gesturechange', onGestureChange);
+      vp.removeEventListener('gestureend', onGestureEnd);
+      vp.removeEventListener('pointerdown', onPointerDown);
+      vp.removeEventListener('pointermove', onPointerMove);
+      vp.removeEventListener('pointerup', onPointerUp);
+      vp.removeEventListener('pointercancel', onPointerUp);
+    };
+  }, [apply, minScale, maxScale]);
+
+  const gridSvg = `url("data:image/svg+xml,%3Csvg width='120' height='120' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M120 0H0v120' fill='none' stroke='${encodeURIComponent(DC.grid)}' stroke-width='1'/%3E%3C/svg%3E")`;
+  return (
+    <div
+      ref={vpRef}
+      className="design-canvas"
+      style={{
+        height: '100vh', width: '100vw',
+        background: DC.bg,
+        overflow: 'hidden',
+        overscrollBehavior: 'none',
+        touchAction: 'none',
+        position: 'relative',
+        fontFamily: DC.font,
+        boxSizing: 'border-box',
+        ...style,
+      }}
+    >
+      <div
+        ref={worldRef}
+        style={{
+          position: 'absolute', top: 0, left: 0,
+          transformOrigin: '0 0',
+          willChange: 'transform',
+          width: 'max-content', minWidth: '100%',
+          minHeight: '100%',
+          padding: '60px 0 80px',
+        }}
+      >
+        <div style={{ position: 'absolute', inset: -6000, backgroundImage: gridSvg, backgroundSize: '120px 120px', pointerEvents: 'none', zIndex: -1 }} />
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// DCSection — editable title + h-row of artboards in persisted order
+// ─────────────────────────────────────────────────────────────
+function DCSection({ id, title, subtitle, children, gap = 48 }) {
+  const ctx = React.useContext(DCCtx);
+  const sid = id ?? title;
+  const all = React.Children.toArray(children);
+  const artboards = all.filter((c) => c && c.type === DCArtboard);
+  const rest = all.filter((c) => !(c && c.type === DCArtboard));
+  const srcOrder = artboards.map((a) => a.props.id ?? a.props.label);
+  const sec = (ctx && sid && ctx.section(sid)) || {};
+
+  const order = React.useMemo(() => {
+    const kept = (sec.order || []).filter((k) => srcOrder.includes(k));
+    return [...kept, ...srcOrder.filter((k) => !kept.includes(k))];
+  }, [sec.order, srcOrder.join('|')]);
+
+  const byId = Object.fromEntries(artboards.map((a) => [a.props.id ?? a.props.label, a]));
+
+  return (
+    <div data-dc-section={sid} style={{ marginBottom: 80, position: 'relative' }}>
+      <div style={{ padding: '0 60px 56px' }}>
+        <DCEditable tag="div" value={sec.title ?? title}
+          onChange={(v) => ctx && sid && ctx.patchSection(sid, { title: v })}
+          style={{ fontSize: 28, fontWeight: 600, color: DC.title, letterSpacing: -0.4, marginBottom: 6, display: 'inline-block' }} />
+        {subtitle && <div style={{ fontSize: 16, color: DC.subtitle }}>{subtitle}</div>}
+      </div>
+      <div style={{ display: 'flex', gap, padding: '0 60px', alignItems: 'flex-start', width: 'max-content' }}>
+        {order.map((k) => (
+          <DCArtboardFrame key={k} sectionId={sid} artboard={byId[k]} order={order}
+            label={(sec.labels || {})[k] ?? byId[k].props.label}
+            onRename={(v) => ctx && ctx.patchSection(sid, (x) => ({ labels: { ...x.labels, [k]: v } }))}
+            onReorder={(next) => ctx && ctx.patchSection(sid, { order: next })}
+            onFocus={() => ctx && ctx.setFocus(`${sid}/${k}`)} />
+        ))}
+      </div>
+      {rest}
+    </div>
+  );
+}
+
+// DCArtboard — marker; rendered by DCArtboardFrame via DCSection.
+function DCArtboard() { return null; }
+
+function DCArtboardFrame({ sectionId, artboard, label, order, onRename, onReorder, onFocus }) {
+  const { id: rawId, label: rawLabel, width = 260, height = 480, children, style = {} } = artboard.props;
+  const id = rawId ?? rawLabel;
+  const ref = React.useRef(null);
+
+  // Live drag-reorder: dragged card sticks to cursor; siblings slide into
+  // their would-be slots in real time via transforms. DOM order only
+  // changes on drop.
+  const onGripDown = (e) => {
+    e.preventDefault(); e.stopPropagation();
+    const me = ref.current;
+    // translateX is applied in local (pre-scale) space but pointer deltas and
+    // getBoundingClientRect().left are screen-space — divide by the viewport's
+    // current scale so the dragged card tracks the cursor at any zoom level.
+    const scale = me.getBoundingClientRect().width / me.offsetWidth || 1;
+    const peers = Array.from(document.querySelectorAll(`[data-dc-section="${sectionId}"] [data-dc-slot]`));
+    const homes = peers.map((el) => ({ el, id: el.dataset.dcSlot, x: el.getBoundingClientRect().left }));
+    const slotXs = homes.map((h) => h.x);
+    const startIdx = order.indexOf(id);
+    const startX = e.clientX;
+    let liveOrder = order.slice();
+    me.classList.add('dc-dragging');
+
+    const layout = () => {
+      for (const h of homes) {
+        if (h.id === id) continue;
+        const slot = liveOrder.indexOf(h.id);
+        h.el.style.transform = `translateX(${(slotXs[slot] - h.x) / scale}px)`;
+      }
+    };
+
+    const move = (ev) => {
+      const dx = ev.clientX - startX;
+      me.style.transform = `translateX(${dx / scale}px)`;
+      const cur = homes[startIdx].x + dx;
+      let nearest = 0, best = Infinity;
+      for (let i = 0; i < slotXs.length; i++) {
+        const d = Math.abs(slotXs[i] - cur);
+        if (d < best) { best = d; nearest = i; }
+      }
+      if (liveOrder.indexOf(id) !== nearest) {
+        liveOrder = order.filter((k) => k !== id);
+        liveOrder.splice(nearest, 0, id);
+        layout();
+      }
+    };
+
+    const up = () => {
+      document.removeEventListener('pointermove', move);
+      document.removeEventListener('pointerup', up);
+      const finalSlot = liveOrder.indexOf(id);
+      me.classList.remove('dc-dragging');
+      me.style.transform = `translateX(${(slotXs[finalSlot] - homes[startIdx].x) / scale}px)`;
+      // After the settle transition, kill transitions + clear transforms +
+      // commit the reorder in the same frame so there's no visual snap-back.
+      setTimeout(() => {
+        for (const h of homes) { h.el.style.transition = 'none'; h.el.style.transform = ''; }
+        if (liveOrder.join('|') !== order.join('|')) onReorder(liveOrder);
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          for (const h of homes) h.el.style.transition = '';
+        }));
+      }, 180);
+    };
+    document.addEventListener('pointermove', move);
+    document.addEventListener('pointerup', up);
+  };
+
+  return (
+    <div ref={ref} data-dc-slot={id} style={{ position: 'relative', flexShrink: 0 }}>
+      <div className="dc-labelrow" style={{ position: 'absolute', bottom: '100%', left: -4, marginBottom: 4, color: DC.label }}>
+        <div className="dc-grip" onPointerDown={onGripDown} title="Drag to reorder">
+          <svg width="9" height="13" viewBox="0 0 9 13" fill="currentColor"><circle cx="2" cy="2" r="1.1"/><circle cx="7" cy="2" r="1.1"/><circle cx="2" cy="6.5" r="1.1"/><circle cx="7" cy="6.5" r="1.1"/><circle cx="2" cy="11" r="1.1"/><circle cx="7" cy="11" r="1.1"/></svg>
+        </div>
+        <div className="dc-labeltext" onClick={onFocus} title="Click to focus">
+          <DCEditable value={label} onChange={onRename} onClick={(e) => e.stopPropagation()}
+            style={{ fontSize: 15, fontWeight: 500, color: DC.label, lineHeight: 1 }} />
+        </div>
+      </div>
+      <button className="dc-expand" onClick={onFocus} onPointerDown={(e) => e.stopPropagation()} title="Focus">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><path d="M7 1h4v4M5 11H1V7M11 1L7.5 4.5M1 11l3.5-3.5"/></svg>
+      </button>
+      <div className="dc-card"
+        style={{ borderRadius: 2, boxShadow: '0 1px 3px rgba(0,0,0,.08),0 4px 16px rgba(0,0,0,.06)', overflow: 'hidden', width, height, background: '#fff', ...style }}>
+        {children || <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#bbb', fontSize: 13, fontFamily: DC.font }}>{id}</div>}
+      </div>
+    </div>
+  );
+}
+
+// Inline rename — commits on blur or Enter.
+function DCEditable({ value, onChange, style, tag = 'span', onClick }) {
+  const T = tag;
+  return (
+    <T className="dc-editable" contentEditable suppressContentEditableWarning
+      onClick={onClick}
+      onPointerDown={(e) => e.stopPropagation()}
+      onBlur={(e) => onChange && onChange(e.currentTarget.textContent)}
+      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); } }}
+      style={style}>{value}</T>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Focus mode — overlay one artboard; ←/→ within section, ↑/↓ across
+// sections, Esc or backdrop click to exit.
+// ─────────────────────────────────────────────────────────────
+function DCFocusOverlay({ entry, sectionMeta, sectionOrder }) {
+  const ctx = React.useContext(DCCtx);
+  const { sectionId, artboard } = entry;
+  const sec = ctx.section(sectionId);
+  const meta = sectionMeta[sectionId];
+  const peers = meta.slotIds;
+  const aid = artboard.props.id ?? artboard.props.label;
+  const idx = peers.indexOf(aid);
+  const secIdx = sectionOrder.indexOf(sectionId);
+
+  const go = (d) => { const n = peers[(idx + d + peers.length) % peers.length]; if (n) ctx.setFocus(`${sectionId}/${n}`); };
+  const goSection = (d) => {
+    const ns = sectionOrder[(secIdx + d + sectionOrder.length) % sectionOrder.length];
+    const first = sectionMeta[ns] && sectionMeta[ns].slotIds[0];
+    if (first) ctx.setFocus(`${ns}/${first}`);
+  };
+
+  React.useEffect(() => {
+    const k = (e) => {
+      if (e.key === 'ArrowLeft') { e.preventDefault(); go(-1); }
+      if (e.key === 'ArrowRight') { e.preventDefault(); go(1); }
+      if (e.key === 'ArrowUp') { e.preventDefault(); goSection(-1); }
+      if (e.key === 'ArrowDown') { e.preventDefault(); goSection(1); }
+    };
+    document.addEventListener('keydown', k);
+    return () => document.removeEventListener('keydown', k);
+  });
+
+  const { width = 260, height = 480, children } = artboard.props;
+  const [vp, setVp] = React.useState({ w: window.innerWidth, h: window.innerHeight });
+  React.useEffect(() => { const r = () => setVp({ w: window.innerWidth, h: window.innerHeight }); window.addEventListener('resize', r); return () => window.removeEventListener('resize', r); }, []);
+  const scale = Math.max(0.1, Math.min((vp.w - 200) / width, (vp.h - 260) / height, 2));
+
+  const [ddOpen, setDd] = React.useState(false);
+  const Arrow = ({ dir, onClick }) => (
+    <button onClick={(e) => { e.stopPropagation(); onClick(); }}
+      style={{ position: 'absolute', top: '50%', [dir]: 28, transform: 'translateY(-50%)',
+        border: 'none', background: 'rgba(255,255,255,.08)', color: 'rgba(255,255,255,.9)',
+        width: 44, height: 44, borderRadius: 22, fontSize: 18, cursor: 'pointer',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background .15s' }}
+      onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,.18)')}
+      onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,.08)')}>
+      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+        <path d={dir === 'left' ? 'M11 3L5 9l6 6' : 'M7 3l6 6-6 6'} /></svg>
+    </button>
+  );
+
+  // Portal to body so position:fixed is the real viewport regardless of any
+  // transform on DesignCanvas's ancestors (including the canvas zoom itself).
+  return ReactDOM.createPortal(
+    <div onClick={() => ctx.setFocus(null)}
+      onWheel={(e) => e.preventDefault()}
+      style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'rgba(24,20,16,.6)', backdropFilter: 'blur(14px)',
+        fontFamily: DC.font, color: '#fff' }}>
+
+      {/* top bar: section dropdown (left) · close (right) */}
+      <div onClick={(e) => e.stopPropagation()}
+        style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 72, display: 'flex', alignItems: 'flex-start', padding: '16px 20px 0', gap: 16 }}>
+        <div style={{ position: 'relative' }}>
+          <button onClick={() => setDd((o) => !o)}
+            style={{ border: 'none', background: 'transparent', color: '#fff', cursor: 'pointer', padding: '6px 8px',
+              borderRadius: 6, textAlign: 'left', fontFamily: 'inherit' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 18, fontWeight: 600, letterSpacing: -0.3 }}>{meta.title}</span>
+              <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" style={{ opacity: .7 }}><path d="M2 4l3.5 3.5L9 4"/></svg>
+            </span>
+            {meta.subtitle && <span style={{ display: 'block', fontSize: 13, opacity: .6, fontWeight: 400, marginTop: 2 }}>{meta.subtitle}</span>}
+          </button>
+          {ddOpen && (
+            <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 4, background: '#2a251f', borderRadius: 8,
+              boxShadow: '0 8px 32px rgba(0,0,0,.4)', padding: 4, minWidth: 200, zIndex: 10 }}>
+              {sectionOrder.map((sid) => (
+                <button key={sid} onClick={() => { setDd(false); const f = sectionMeta[sid].slotIds[0]; if (f) ctx.setFocus(`${sid}/${f}`); }}
+                  style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', cursor: 'pointer',
+                    background: sid === sectionId ? 'rgba(255,255,255,.1)' : 'transparent', color: '#fff',
+                    padding: '8px 12px', borderRadius: 5, fontSize: 14, fontWeight: sid === sectionId ? 600 : 400, fontFamily: 'inherit' }}>
+                  {sectionMeta[sid].title}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <div style={{ flex: 1 }} />
+        <button onClick={() => ctx.setFocus(null)}
+          onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,.12)')}
+          onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+          style={{ border: 'none', background: 'transparent', color: 'rgba(255,255,255,.7)', width: 32, height: 32,
+            borderRadius: 16, fontSize: 20, cursor: 'pointer', lineHeight: 1, transition: 'background .12s' }}>×</button>
+      </div>
+
+      {/* card centered, label + index below — only the card itself stops
+          propagation so any backdrop click (including the margins around
+          the card) exits focus */}
+      <div
+        style={{ position: 'absolute', top: 64, bottom: 56, left: 100, right: 100, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
+        <div onClick={(e) => e.stopPropagation()} style={{ width: width * scale, height: height * scale, position: 'relative' }}>
+          <div style={{ width, height, transform: `scale(${scale})`, transformOrigin: 'top left', background: '#fff', borderRadius: 2, overflow: 'hidden',
+            boxShadow: '0 20px 80px rgba(0,0,0,.4)' }}>
+            {children || <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#bbb' }}>{aid}</div>}
+          </div>
+        </div>
+        <div onClick={(e) => e.stopPropagation()} style={{ fontSize: 14, fontWeight: 500, opacity: .85, textAlign: 'center' }}>
+          {(sec.labels || {})[aid] ?? artboard.props.label}
+          <span style={{ opacity: .5, marginLeft: 10, fontVariantNumeric: 'tabular-nums' }}>{idx + 1} / {peers.length}</span>
+        </div>
+      </div>
+
+      <Arrow dir="left" onClick={() => go(-1)} />
+      <Arrow dir="right" onClick={() => go(1)} />
+
+      {/* dots */}
+      <div onClick={(e) => e.stopPropagation()}
+        style={{ position: 'absolute', bottom: 20, left: '50%', transform: 'translateX(-50%)', display: 'flex', gap: 8 }}>
+        {peers.map((p, i) => (
+          <button key={p} onClick={() => ctx.setFocus(`${sectionId}/${p}`)}
+            style={{ border: 'none', padding: 0, cursor: 'pointer', width: 6, height: 6, borderRadius: 3,
+              background: i === idx ? '#fff' : 'rgba(255,255,255,.3)' }} />
+        ))}
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Post-it — absolute-positioned sticky note
+// ─────────────────────────────────────────────────────────────
+function DCPostIt({ children, top, left, right, bottom, rotate = -2, width = 180 }) {
+  return (
+    <div style={{
+      position: 'absolute', top, left, right, bottom, width,
+      background: DC.postitBg, padding: '14px 16px',
+      fontFamily: '"Comic Sans MS", "Marker Felt", "Segoe Print", cursive',
+      fontSize: 14, lineHeight: 1.4, color: DC.postitText,
+      boxShadow: '0 2px 8px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.08)',
+      transform: `rotate(${rotate}deg)`,
+      zIndex: 5,
+    }}>{children}</div>
+  );
+}
+
+Object.assign(window, { DesignCanvas, DCSection, DCArtboard, DCPostIt });
+
+
+</script>
+<script type="text/babel" data-presets="react">
+/* dash-shared */
+// Shared dashboard data + atoms — Stripe Dashboard-style.
+
+const DASH_POSTS = [
+  { id: "p1",  title: "Introducing programmable holds: pause, route, and release funds with policy", status: "published",  cat: "Product",     tags: ["holds","ledger","policy"], words: 1842, readTime: 6,  views: "12.4k", publishedAt: "Apr 24, 2026", editedBy: "Ada O.",   editedAt: "2d ago",  scheduled: null,            comments: 14 },
+  { id: "p2",  title: "How we cut FX quote latency by 41% across 14 corridors",                       status: "published",  cat: "Engineering", tags: ["fx","performance"],          words: 3120, readTime: 11, views: "8.9k",  publishedAt: "Apr 22, 2026", editedBy: "Tomás R.", editedAt: "4d ago",  scheduled: null,            comments: 32 },
+  { id: "p3",  title: "How Lagos-based Sendwave Africa moved $2.3B with a 3-person ops team",         status: "scheduled",  cat: "Customers",   tags: ["case-study","africa"],       words: 2204, readTime: 8,  views: "—",     publishedAt: "—",            editedBy: "Maya I.",  editedAt: "1h ago",  scheduled: "May 02, 09:00", comments: 0  },
+  { id: "p4",  title: "Cross-border payouts in 2026: the data we're seeing",                          status: "review",     cat: "Markets",     tags: ["q1","data"],                 words: 1512, readTime: 5,  views: "—",     publishedAt: "—",            editedBy: "Lior G.",  editedAt: "5h ago",  scheduled: null,            comments: 3  },
+  { id: "p5",  title: "Idempotency at scale: replaying 11M payouts without flinching",                status: "draft",      cat: "Engineering", tags: ["idempotency","reliability"], words: 980,  readTime: 4,  views: "—",     publishedAt: "—",            editedBy: "Priya B.", editedAt: "1d ago",  scheduled: null,            comments: 0  },
+  { id: "p6",  title: "Build a multi-currency wallet in 90 minutes with the Puplar API",              status: "draft",      cat: "Guides",      tags: ["api","tutorial"],            words: 380,  readTime: 2,  views: "—",     publishedAt: "—",            editedBy: "Devrel",   editedAt: "3d ago",  scheduled: null,            comments: 0  },
+  { id: "p7",  title: "Puplar raises $48M Series B to expand into LATAM corridors",                   status: "published",  cat: "Company",     tags: ["news","funding"],            words: 612,  readTime: 4,  views: "31.2k", publishedAt: "Apr 02, 2026", editedBy: "Femi A.",  editedAt: "27d ago", scheduled: null,            comments: 89 },
+  { id: "p8",  title: "Reconciliation reports get a new home and a new export format",               status: "scheduled",  cat: "Product",     tags: ["reports","exports"],         words: 1102, readTime: 5,  views: "—",     publishedAt: "—",            editedBy: "Ada O.",   editedAt: "11h ago", scheduled: "Apr 30, 14:00", comments: 1  },
+  { id: "p9",  title: "The case for synchronous webhooks (sometimes)",                                status: "review",     cat: "Engineering", tags: ["webhooks","api"],            words: 1820, readTime: 7,  views: "—",     publishedAt: "—",            editedBy: "Tomás R.", editedAt: "8h ago",  scheduled: null,            comments: 2  },
+  { id: "p10", title: "What we learned shipping virtual accounts in Brazil",                         status: "draft",      cat: "Engineering", tags: ["brazil","accounts"],         words: 240,  readTime: 1,  views: "—",     publishedAt: "—",            editedBy: "Sora P.",  editedAt: "6d ago",  scheduled: null,            comments: 0  },
+  { id: "p11", title: "Hiring: Principal engineer, Reliability",                                      status: "published",  cat: "Company",     tags: ["hiring"],                    words: 412,  readTime: 2,  views: "5.1k",  publishedAt: "Mar 28, 2026", editedBy: "Femi A.",  editedAt: "32d ago", scheduled: null,            comments: 4  },
+  { id: "p12", title: "Why we open-sourced our ledger replay tool",                                   status: "review",     cat: "Engineering", tags: ["open-source","ledger"],      words: 1340, readTime: 5,  views: "—",     publishedAt: "—",            editedBy: "Jules A.", editedAt: "2d ago",  scheduled: null,            comments: 5  },
+];
+
+const STATUS_META = {
+  draft:     { label: "Draft",     dot: "bg-stone-400",   pill: "bg-stone-100 text-stone-700 border border-stone-200" },
+  review:    { label: "In review", dot: "bg-amber-500",   pill: "bg-amber-50 text-amber-800 border border-amber-200" },
+  scheduled: { label: "Scheduled", dot: "bg-violet-500",  pill: "bg-violet-50 text-violet-800 border border-violet-200" },
+  published: { label: "Published", dot: "bg-emerald-500", pill: "bg-emerald-50 text-emerald-800 border border-emerald-200" },
+};
+
+const DASH_CATEGORIES = [
+  { id: "product",     name: "Product",     count: 38, color: "#0d9488" },
+  { id: "engineering", name: "Engineering", count: 51, color: "#0891b2" },
+  { id: "customers",   name: "Customers",   count: 17, color: "#a16207" },
+  { id: "markets",     name: "Markets",     count: 12, color: "#b45309" },
+  { id: "company",     name: "Company",     count: 9,  color: "#374151" },
+  { id: "guides",      name: "Guides",      count: 15, color: "#be123c" },
+];
+
+const DASH_TAGS = [
+  "ledger", "policy", "fx", "performance", "case-study", "africa", "q1", "data", "idempotency", "reliability",
+  "api", "tutorial", "news", "funding", "reports", "exports", "webhooks", "brazil", "accounts", "hiring",
+  "open-source", "latam", "compliance", "kyc", "settlement",
+];
+
+const DASH_MEDIA = [
+  { id: "m1", name: "fx-corridors-hero.png",  type: "image", size: "412 KB", w: 2400, h: 1350, used: 3, hue: 192 },
+  { id: "m2", name: "policy-gates-diagram.svg", type: "svg", size: "18 KB",  w: 1200, h: 800,  used: 1, hue: 158 },
+  { id: "m3", name: "sendwave-cover.png",     type: "image", size: "604 KB", w: 2400, h: 1500, used: 1, hue: 32 },
+  { id: "m4", name: "q1-volumes-chart.svg",   type: "svg", size: "11 KB",  w: 1600, h: 900,  used: 2, hue: 24 },
+  { id: "m5", name: "idempotency-banner.png", type: "image", size: "388 KB", w: 2400, h: 1200, used: 1, hue: 196 },
+  { id: "m6", name: "wallet-flow.png",        type: "image", size: "722 KB", w: 2400, h: 1600, used: 0, hue: 348 },
+  { id: "m7", name: "series-b-press.jpg",     type: "image", size: "1.2 MB", w: 3000, h: 2000, used: 4, hue: 220 },
+  { id: "m8", name: "recon-export.png",       type: "image", size: "511 KB", w: 2400, h: 1400, used: 1, hue: 158 },
+  { id: "m9", name: "webhook-diagram.svg",    type: "svg", size: "9 KB",   w: 1400, h: 900,  used: 0, hue: 192 },
+  { id: "m10", name: "brazil-mvp.png",         type: "image", size: "402 KB", w: 2400, h: 1300, used: 0, hue: 158 },
+];
+
+// Inline icons (24px stroke). Tiny + dependency-free.
+const Ic = {
+  Search: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>,
+  Plus:   (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14"/></svg>,
+  Filter: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M4 5h16M7 12h10M10 19h4"/></svg>,
+  Sort:   (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h13M3 12h9M3 18h5M17 4v16M17 20l3-3M17 20l-3-3"/></svg>,
+  More:   (p) => <svg {...p} viewBox="0 0 24 24" fill="currentColor"><circle cx="6" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18" cy="12" r="1.6"/></svg>,
+  Eye:    (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>,
+  Bolt:   (p) => <svg {...p} viewBox="0 0 24 24" fill="currentColor"><path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z"/></svg>,
+  Doc:    (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5"/><path d="M9 13h7M9 17h5"/></svg>,
+  Folder: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h6l2 2h10v11H3z"/></svg>,
+  Tag:    (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12V3h9l9 9-9 9z"/><circle cx="8" cy="8" r="1.5" fill="currentColor"/></svg>,
+  Image:  (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="1.5"/><path d="M3 17l5-5 4 4 4-3 5 5"/></svg>,
+  Chart:  (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M4 20V8M10 20V4M16 20v-9M22 20H2"/></svg>,
+  Settings:(p)=> <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>,
+  Calendar:(p)=> <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>,
+  Check:  (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12l5 5L20 6"/></svg>,
+  Chevron:(p)=> <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6"/></svg>,
+  ChevronDown:(p)=> <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6"/></svg>,
+  Bell:   (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9z"/><path d="M10 21a2 2 0 0 0 4 0"/></svg>,
+  Upload: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M12 16V4M12 4l-5 5M12 4l5 5"/><path d="M4 20h16"/></svg>,
+  Drag:   (p) => <svg {...p} viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.3"/><circle cx="15" cy="6" r="1.3"/><circle cx="9" cy="12" r="1.3"/><circle cx="15" cy="12" r="1.3"/><circle cx="9" cy="18" r="1.3"/><circle cx="15" cy="18" r="1.3"/></svg>,
+  Bold:   (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M7 4h6a4 4 0 0 1 0 8H7zM7 12h7a4 4 0 0 1 0 8H7z"/></svg>,
+  Italic: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 4h-9M14 20H5M15 4l-6 16"/></svg>,
+  Link:   (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>,
+  Code:   (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M8 8l-4 4 4 4M16 8l4 4-4 4M14 4l-4 16"/></svg>,
+  Quote:  (p) => <svg {...p} viewBox="0 0 24 24" fill="currentColor"><path d="M9 6c-3 1-5 4-5 8h3v6H1v-6c0-5 3-9 8-10zM21 6c-3 1-5 4-5 8h3v6h-6v-6c0-5 3-9 8-10z" opacity=".85"/></svg>,
+  H1:     (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M4 5v14M14 5v14M4 12h10"/><path d="M19 9l3-1v11"/></svg>,
+  H2:     (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M4 5v14M12 5v14M4 12h8"/><path d="M16 9c0-1 1-2 2.5-2S21 8 21 9.5c0 2.5-4 3.5-4 6.5h4"/></svg>,
+  List:   (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="5" cy="6" r="1" fill="currentColor"/><circle cx="5" cy="12" r="1" fill="currentColor"/><circle cx="5" cy="18" r="1" fill="currentColor"/><path d="M10 6h11M10 12h11M10 18h11"/></svg>,
+  X:      (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg>,
+  Globe:  (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg>,
+  Logo:   (p) => <svg {...p} viewBox="0 0 24 24" fill="none"><rect x="2" y="2" width="20" height="20" rx="5" fill="currentColor"/><path d="M8 7h5a3.5 3.5 0 0 1 0 7H10v3H8z" fill="#fff"/></svg>,
+};
+
+// Tiny placeholder rendered with hue-rotate so each thumbnail looks distinct
+// without bringing in real images.
+function Thumb({ hue = 192, w = 240, h = 150, label, className = "" }) {
+  return (
+    <div className={`relative overflow-hidden ${className}`} style={{ width: w, height: h, background: `hsl(${hue} 60% 92%)` }}>
+      <div className="absolute inset-0" style={{
+        backgroundImage: `repeating-linear-gradient(135deg, hsl(${hue} 50% 78% / .7) 0 8px, transparent 8px 18px), radial-gradient(circle at 70% 30%, hsl(${hue} 70% 70% / .55), transparent 60%)`,
+      }} />
+      {label && <div className="absolute left-2 bottom-2 text-[10px] tracking-[0.08em] uppercase font-mono opacity-60">{label}</div>}
+    </div>
+  );
+}
+
+// Simple avatar w/ initials, used for "edited by" indicators only.
+function Avatar({ name, size = 22 }) {
+  const initials = name.split(" ").map((s) => s[0]).slice(0, 2).join("").toUpperCase();
+  const palette = ["#0e7490", "#0f766e", "#7c2d12", "#7e22ce", "#9d174d", "#1e40af", "#365314", "#9a3412"];
+  const hash = [...name].reduce((a, c) => a + c.charCodeAt(0), 0);
+  const bg = palette[hash % palette.length];
+  return (
+    <span className="inline-flex items-center justify-center rounded-full text-white font-semibold" style={{ width: size, height: size, background: bg, fontSize: size * 0.45, letterSpacing: "-0.02em" }}>
+      {initials}
+    </span>
+  );
+}
+
+function StatusPill({ status, size = "md" }) {
+  const m = STATUS_META[status];
+  const sz = size === "sm" ? "text-[11px] px-1.5 py-0.5 gap-1" : "text-[12px] px-2 py-0.5 gap-1.5";
+  return (
+    <span className={`inline-flex items-center rounded-full ${sz} ${m.pill} font-medium`}>
+      <span className={`w-1.5 h-1.5 rounded-full ${m.dot}`} />
+      {m.label}
+    </span>
+  );
+}
+
+Object.assign(window, { DASH_POSTS, STATUS_META, DASH_CATEGORIES, DASH_TAGS, DASH_MEDIA, Ic, Thumb, Avatar, StatusPill });
+
+</script>
+<script type="text/babel" data-presets="react">
+/* dash-chrome */
+// Sidebar nav + top bar shared across all dashboard screens.
+
+function DashSidebar({ active = "posts", collapsed = false }) {
+  const items = [
+    { id: "overview", label: "Overview",    icon: Ic.Chart },
+    { id: "posts",    label: "Posts",       icon: Ic.Doc, badge: "12" },
+    { id: "media",    label: "Media",       icon: Ic.Image },
+    { id: "taxonomy", label: "Categories",  icon: Ic.Folder },
+    { id: "tags",     label: "Tags",        icon: Ic.Tag },
+    { id: "schedule", label: "Schedule",    icon: Ic.Calendar },
+  ];
+  const w = collapsed ? "w-[60px]" : "w-[232px]";
+  return (
+    <aside className={`${w} shrink-0 border-r border-stone-200 bg-white flex flex-col h-full transition-[width]`}>
+      <div className={`h-14 flex items-center ${collapsed ? "justify-center" : "px-4"} border-b border-stone-200`}>
+        <div className="flex items-center gap-2 text-puplar-700">
+          <Ic.Logo className="w-7 h-7" />
+          {!collapsed && (
+            <div className="flex flex-col leading-tight">
+              <span className="font-display font-bold text-[15px] tracking-[-0.01em] text-stone-900">puplar</span>
+              <span className="text-[10px] font-mono uppercase tracking-[0.1em] text-stone-500">blog studio</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className={collapsed ? "px-2 py-3" : "px-3 py-3"}>
+        <button className={`w-full bg-puplar-700 hover:bg-puplar-900 text-white rounded-md text-[13px] font-semibold flex items-center justify-center gap-2 ${collapsed ? "p-2" : "px-3 py-2"}`}>
+          <Ic.Plus className="w-4 h-4" />
+          {!collapsed && <span>New post</span>}
+        </button>
+      </div>
+
+      <nav className={`flex-1 ${collapsed ? "px-2" : "px-2"} flex flex-col gap-0.5`}>
+        {items.map((it) => {
+          const Icon = it.icon;
+          const isActive = it.id === active;
+          return (
+            <a key={it.id} href="#" className={`flex items-center gap-2.5 ${collapsed ? "justify-center px-2" : "px-2.5"} py-2 rounded-md text-[13px] font-medium transition ${isActive ? "bg-stone-100 text-stone-900" : "text-stone-600 hover:bg-stone-50 hover:text-stone-900"}`} title={collapsed ? it.label : undefined}>
+              <Icon className="w-4 h-4 shrink-0" />
+              {!collapsed && (
+                <>
+                  <span className="flex-1">{it.label}</span>
+                  {it.badge && <span className="text-[10px] font-mono bg-stone-200 text-stone-700 px-1.5 py-0.5 rounded">{it.badge}</span>}
+                </>
+              )}
+            </a>
+          );
+        })}
+      </nav>
+
+      {!collapsed && (
+        <div className="p-3 border-t border-stone-200">
+          <div className="bg-stone-50 rounded-lg p-3">
+            <div className="flex items-center gap-2 mb-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              <span className="text-[11px] font-mono uppercase tracking-[0.08em] text-stone-600">Live</span>
+            </div>
+            <div className="text-[12px] text-stone-700 leading-snug">142 posts published. <a href="#" className="text-puplar-700 font-medium">Visit blog →</a></div>
+          </div>
+        </div>
+      )}
+
+      <div className={`border-t border-stone-200 ${collapsed ? "p-2" : "p-3"}`}>
+        <a href="#" className={`flex items-center gap-2 ${collapsed ? "justify-center" : ""} text-[13px] text-stone-600 hover:text-stone-900`}>
+          <Ic.Settings className="w-4 h-4" />
+          {!collapsed && <span>Settings</span>}
+        </a>
+      </div>
+    </aside>
+  );
+}
+
+function DashTopBar({ title, breadcrumbs = [], children }) {
+  return (
+    <header className="h-14 border-b border-stone-200 bg-white px-6 flex items-center justify-between shrink-0">
+      <div className="flex items-center gap-2 text-[14px]">
+        {breadcrumbs.map((b, i) => (
+          <React.Fragment key={i}>
+            {i > 0 && <Ic.Chevron className="w-3.5 h-3.5 text-stone-400" />}
+            <span className={i === breadcrumbs.length - 1 ? "text-stone-900 font-semibold" : "text-stone-500"}>{b}</span>
+          </React.Fragment>
+        ))}
+        {!breadcrumbs.length && <span className="font-display font-semibold text-[15px] text-stone-900 tracking-[-0.005em]">{title}</span>}
+      </div>
+      <div className="flex items-center gap-3">
+        {children}
+        <div className="relative">
+          <Ic.Search className="absolute left-2.5 top-2 w-4 h-4 text-stone-400" />
+          <input placeholder="Search posts, media, tags…" className="pl-8 pr-3 py-1.5 text-[13px] border border-stone-200 rounded-md w-[260px] bg-stone-50 focus:bg-white focus:border-puplar-700 outline-none" />
+          <kbd className="absolute right-2 top-1.5 text-[10px] font-mono text-stone-400 bg-white border border-stone-200 px-1 rounded">⌘K</kbd>
+        </div>
+        <button className="relative p-1.5 text-stone-500 hover:text-stone-900">
+          <Ic.Bell className="w-4 h-4" />
+          <span className="absolute top-1 right-1 w-1.5 h-1.5 bg-rose-500 rounded-full" />
+        </button>
+        <Avatar name="Team Editor" size={26} />
+      </div>
+    </header>
+  );
+}
+
+Object.assign(window, { DashSidebar, DashTopBar });
+
+</script>
+<script type="text/babel" data-presets="react">
+/* dash-posts-table */
+// Posts list — dense table view (Stripe Dashboard style).
+
+function DashPostsTable() {
+  const [tab, setTab] = React.useState("all");
+  const [selected, setSelected] = React.useState(new Set(["p3"]));
+  const tabs = [
+    { id: "all",       label: "All",       count: DASH_POSTS.length },
+    { id: "published", label: "Published", count: DASH_POSTS.filter(p => p.status === "published").length },
+    { id: "scheduled", label: "Scheduled", count: DASH_POSTS.filter(p => p.status === "scheduled").length },
+    { id: "review",    label: "In review", count: DASH_POSTS.filter(p => p.status === "review").length },
+    { id: "draft",     label: "Drafts",    count: DASH_POSTS.filter(p => p.status === "draft").length },
+  ];
+  const visible = tab === "all" ? DASH_POSTS : DASH_POSTS.filter(p => p.status === tab);
+
+  const toggle = (id) => {
+    const next = new Set(selected);
+    next.has(id) ? next.delete(id) : next.add(id);
+    setSelected(next);
+  };
+
+  return (
+    <div className="flex-1 flex flex-col bg-stone-50 min-h-0">
+      <div className="px-8 pt-7 pb-5">
+        <div className="flex items-end justify-between gap-6 mb-1">
+          <div>
+            <h1 className="font-display font-bold text-[26px] tracking-[-0.02em] text-stone-900 leading-tight m-0">Posts</h1>
+            <p className="text-[13px] text-stone-500 mt-1">Write, schedule, and ship posts to the Puplar blog.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button className="text-[13px] text-stone-700 border border-stone-200 bg-white rounded-md px-3 py-1.5 inline-flex items-center gap-1.5 hover:bg-stone-50">
+              <Ic.Upload className="w-3.5 h-3.5" /> Import
+            </button>
+            <button className="text-[13px] font-semibold text-white bg-puplar-700 hover:bg-puplar-900 rounded-md px-3.5 py-1.5 inline-flex items-center gap-1.5">
+              <Ic.Plus className="w-3.5 h-3.5" /> New post
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-4 gap-3 mt-6">
+          {[
+            { k: "Drafts",      v: 3,    d: "+2 this week",  color: "text-stone-700" },
+            { k: "In review",   v: 3,    d: "1 needs sign-off", color: "text-amber-700" },
+            { k: "Scheduled",   v: 2,    d: "Next: Apr 30 14:00", color: "text-violet-700" },
+            { k: "Published 30d", v: 11, d: "+3 vs prev 30d", color: "text-emerald-700" },
+          ].map((s) => (
+            <div key={s.k} className="bg-white border border-stone-200 rounded-lg px-4 py-3">
+              <div className="text-[11px] font-mono uppercase tracking-[0.1em] text-stone-500">{s.k}</div>
+              <div className={`font-display text-[28px] font-bold tracking-[-0.025em] mt-0.5 leading-none ${s.color}`}>{s.v}</div>
+              <div className="text-[12px] text-stone-500 mt-1.5">{s.d}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="px-8 flex-1 flex flex-col min-h-0">
+        <div className="bg-white border border-stone-200 rounded-lg overflow-hidden flex flex-col flex-1 min-h-0">
+          <div className="flex items-center justify-between border-b border-stone-200 px-4 pt-2.5">
+            <div className="flex gap-1">
+              {tabs.map((t) => (
+                <button key={t.id} onClick={() => setTab(t.id)} className={`text-[13px] px-3 py-2 -mb-px border-b-2 transition ${tab === t.id ? "border-puplar-700 text-stone-900 font-semibold" : "border-transparent text-stone-500 hover:text-stone-800"}`}>
+                  {t.label} <span className="ml-1 text-[11px] text-stone-400 font-normal">{t.count}</span>
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-1.5 pb-2">
+              <button className="text-[12px] text-stone-600 border border-stone-200 rounded-md px-2.5 py-1 inline-flex items-center gap-1.5 hover:bg-stone-50">
+                <Ic.Filter className="w-3.5 h-3.5" /> Filter
+              </button>
+              <button className="text-[12px] text-stone-600 border border-stone-200 rounded-md px-2.5 py-1 inline-flex items-center gap-1.5 hover:bg-stone-50">
+                <Ic.Sort className="w-3.5 h-3.5" /> Sort: Recent
+              </button>
+              <button className="text-[12px] text-stone-600 border border-stone-200 rounded-md px-2 py-1 hover:bg-stone-50">
+                <Ic.More className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+
+          {selected.size > 0 && (
+            <div className="bg-puplar-700 text-white px-4 py-2 flex items-center justify-between text-[13px]">
+              <div className="flex items-center gap-3">
+                <span className="font-semibold">{selected.size} selected</span>
+                <button className="text-white/85 hover:text-white">Move to…</button>
+                <span className="opacity-30">·</span>
+                <button className="text-white/85 hover:text-white">Add tags</button>
+                <span className="opacity-30">·</span>
+                <button className="text-white/85 hover:text-white">Schedule</button>
+                <span className="opacity-30">·</span>
+                <button className="text-rose-200 hover:text-rose-100">Delete</button>
+              </div>
+              <button onClick={() => setSelected(new Set())} className="text-white/70 hover:text-white"><Ic.X className="w-4 h-4" /></button>
+            </div>
+          )}
+
+          <div className="flex-1 overflow-auto">
+            <table className="w-full text-[13px]">
+              <thead className="bg-stone-50/70 border-b border-stone-200 sticky top-0">
+                <tr className="text-left text-[11px] font-mono uppercase tracking-[0.08em] text-stone-500">
+                  <th className="px-4 py-2.5 w-8"><input type="checkbox" className="accent-puplar-700" /></th>
+                  <th className="px-2 py-2.5">Title</th>
+                  <th className="px-2 py-2.5 w-[110px]">Status</th>
+                  <th className="px-2 py-2.5 w-[120px]">Category</th>
+                  <th className="px-2 py-2.5 w-[80px] text-right">Words</th>
+                  <th className="px-2 py-2.5 w-[80px] text-right">Views</th>
+                  <th className="px-2 py-2.5 w-[150px]">Last edited</th>
+                  <th className="px-2 py-2.5 w-[120px]">Schedule / pub</th>
+                  <th className="px-2 py-2.5 w-10"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {visible.map((p) => {
+                  const isSel = selected.has(p.id);
+                  return (
+                    <tr key={p.id} className={`border-b border-stone-100 hover:bg-stone-50/70 ${isSel ? "bg-puplar-700/[0.04]" : ""}`}>
+                      <td className="px-4 py-3"><input type="checkbox" checked={isSel} onChange={() => toggle(p.id)} className="accent-puplar-700" /></td>
+                      <td className="px-2 py-3 max-w-[420px]">
+                        <div className="flex items-start gap-2.5">
+                          <div className="w-9 h-9 rounded shrink-0" style={{ background: `hsl(${(p.id.charCodeAt(1) * 50) % 360} 60% 88%)` }} />
+                          <div className="min-w-0">
+                            <div className="font-semibold text-stone-900 truncate text-[13.5px]">{p.title}</div>
+                            <div className="flex gap-1.5 mt-1 flex-wrap">
+                              {p.tags.slice(0, 3).map((t) => (
+                                <span key={t} className="text-[11px] text-stone-500 bg-stone-100 rounded px-1.5 py-0.5">#{t}</span>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-2 py-3"><StatusPill status={p.status} size="sm" /></td>
+                      <td className="px-2 py-3 text-stone-700">{p.cat}</td>
+                      <td className="px-2 py-3 text-right font-mono text-stone-600">{p.words.toLocaleString()}</td>
+                      <td className="px-2 py-3 text-right font-mono text-stone-600">{p.views}</td>
+                      <td className="px-2 py-3">
+                        <div className="flex items-center gap-1.5">
+                          <Avatar name={p.editedBy} size={18} />
+                          <span className="text-stone-700 text-[12.5px]">{p.editedBy}</span>
+                          <span className="text-stone-400 text-[12px]">· {p.editedAt}</span>
+                        </div>
+                      </td>
+                      <td className="px-2 py-3 text-stone-600 text-[12.5px]">
+                        {p.scheduled ? <span className="text-violet-700">{p.scheduled}</span> : p.publishedAt}
+                      </td>
+                      <td className="px-2 py-3 text-stone-400">
+                        <button className="hover:text-stone-700 p-1"><Ic.More className="w-4 h-4" /></button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="border-t border-stone-200 px-4 py-2.5 flex items-center justify-between text-[12px] text-stone-500">
+            <span>Showing <span className="text-stone-900 font-semibold">{visible.length}</span> of {DASH_POSTS.length}</span>
+            <div className="flex items-center gap-1">
+              <button className="px-2 py-1 border border-stone-200 rounded hover:bg-stone-50">Prev</button>
+              <button className="px-2 py-1 border border-stone-200 rounded bg-stone-50 font-semibold">1</button>
+              <button className="px-2 py-1 border border-stone-200 rounded hover:bg-stone-50">2</button>
+              <button className="px-2 py-1 border border-stone-200 rounded hover:bg-stone-50">Next</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="h-8" />
+    </div>
+  );
+}
+
+window.DashPostsTable = DashPostsTable;
+
+</script>
+<script type="text/babel" data-presets="react">
+/* dash-posts-kanban */
+// Posts list — Kanban view by status.
+
+function DashPostsKanban() {
+  const cols = [
+    { id: "draft",     label: "Draft" },
+    { id: "review",    label: "In review" },
+    { id: "scheduled", label: "Scheduled" },
+    { id: "published", label: "Published" },
+  ];
+
+  return (
+    <div className="flex-1 flex flex-col bg-stone-50 min-h-0">
+      <div className="px-8 pt-7 pb-5 flex items-end justify-between">
+        <div>
+          <h1 className="font-display font-bold text-[26px] tracking-[-0.02em] text-stone-900 m-0">Posts</h1>
+          <p className="text-[13px] text-stone-500 mt-1">Drag to move between stages.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="bg-white border border-stone-200 rounded-md flex p-0.5 text-[12px]">
+            <button className="px-2.5 py-1 text-stone-500 rounded">Table</button>
+            <button className="px-2.5 py-1 bg-stone-100 text-stone-900 rounded font-semibold">Kanban</button>
+          </div>
+          <button className="text-[13px] font-semibold text-white bg-puplar-700 rounded-md px-3.5 py-1.5 inline-flex items-center gap-1.5">
+            <Ic.Plus className="w-3.5 h-3.5" /> New post
+          </button>
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-x-auto overflow-y-hidden px-8 pb-8">
+        <div className="grid grid-cols-4 gap-4 min-w-[1100px] h-full">
+          {cols.map((c) => {
+            const items = DASH_POSTS.filter((p) => p.status === c.id);
+            return (
+              <div key={c.id} className="bg-stone-100/70 border border-stone-200 rounded-lg flex flex-col min-h-0">
+                <div className="px-3 py-2.5 flex items-center justify-between border-b border-stone-200">
+                  <div className="flex items-center gap-2">
+                    <span className={`w-1.5 h-1.5 rounded-full ${STATUS_META[c.id].dot}`} />
+                    <span className="text-[12px] font-semibold uppercase tracking-[0.06em] text-stone-700">{c.label}</span>
+                    <span className="text-[11px] font-mono text-stone-500">{items.length}</span>
+                  </div>
+                  <button className="text-stone-400 hover:text-stone-700"><Ic.Plus className="w-3.5 h-3.5" /></button>
+                </div>
+                <div className="flex-1 p-2 flex flex-col gap-2 overflow-y-auto">
+                  {items.map((p) => (
+                    <div key={p.id} className="bg-white rounded-md border border-stone-200 p-3 cursor-grab hover:border-stone-300">
+                      <div className="w-full h-16 rounded mb-2.5" style={{ background: `hsl(${(p.id.charCodeAt(1) * 50) % 360} 60% 88%)` }} />
+                      <div className="text-[11px] font-mono uppercase tracking-[0.06em] text-stone-500 mb-1">{p.cat}</div>
+                      <div className="text-[13px] font-semibold text-stone-900 leading-snug text-pretty">{p.title}</div>
+                      <div className="flex gap-1 mt-2 flex-wrap">
+                        {p.tags.slice(0, 2).map((t) => (
+                          <span key={t} className="text-[10px] text-stone-500 bg-stone-100 rounded px-1.5 py-0.5">#{t}</span>
+                        ))}
+                      </div>
+                      <div className="flex items-center justify-between mt-3 pt-2 border-t border-stone-100">
+                        <div className="flex items-center gap-1.5">
+                          <Avatar name={p.editedBy} size={18} />
+                          <span className="text-[11px] text-stone-500">{p.editedAt}</span>
+                        </div>
+                        <span className="text-[11px] text-stone-500 font-mono">{p.words.toLocaleString()}w</span>
+                      </div>
+                      {p.scheduled && (
+                        <div className="mt-2 text-[11px] text-violet-700 inline-flex items-center gap-1">
+                          <Ic.Calendar className="w-3 h-3" /> {p.scheduled}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  {items.length === 0 && (
+                    <div className="text-[12px] text-stone-400 text-center py-8 border border-dashed border-stone-200 rounded">No posts</div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+window.DashPostsKanban = DashPostsKanban;
+
+</script>
+<script type="text/babel" data-presets="react">
+/* dash-editor */
+// Notion-style block editor.
+
+function DashEditor() {
+  const [showSlash, setShowSlash] = React.useState(false);
+
+  return (
+    <div className="flex-1 flex bg-white min-h-0">
+      <div className="flex-1 flex flex-col min-h-0">
+        <div className="h-12 border-b border-stone-200 px-6 flex items-center justify-between text-[13px] shrink-0">
+          <div className="flex items-center gap-3 text-stone-500">
+            <a href="#" className="hover:text-stone-900">Posts</a>
+            <Ic.Chevron className="w-3.5 h-3.5" />
+            <span className="text-stone-900 font-semibold">FX quote latency</span>
+            <span className="text-[11px] text-stone-400 ml-2">Saved 2s ago · v23</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <StatusPill status="draft" size="sm" />
+            <button className="text-[12px] text-stone-700 border border-stone-200 rounded-md px-2.5 py-1 hover:bg-stone-50">Preview</button>
+            <button className="text-[12px] text-stone-700 border border-stone-200 rounded-md px-2.5 py-1 hover:bg-stone-50">Request review</button>
+            <button className="text-[12px] font-semibold text-white bg-puplar-700 rounded-md px-3 py-1 inline-flex items-center gap-1"><Ic.Bolt className="w-3 h-3" /> Publish</button>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto">
+          <div className="max-w-[720px] mx-auto px-8 py-12">
+            <div className="text-[12px] font-mono uppercase tracking-[0.1em] text-stone-500 mb-3">Engineering · Draft</div>
+            <h1 className="font-display font-bold text-[44px] leading-[1.05] tracking-[-0.03em] text-stone-900 m-0 outline-none" contentEditable suppressContentEditableWarning>How we cut FX quote latency by 41% across 14 corridors</h1>
+            <p className="text-[18px] text-stone-500 mt-4 leading-[1.45] outline-none" contentEditable suppressContentEditableWarning>Rebuilding our pricing path on a single in-process actor model, and what we learned in the process.</p>
+
+            <div className="mt-12 flex flex-col gap-3 text-[16px] text-stone-800 leading-[1.65]">
+              <BlockRow type="p">
+                Pricing FX is one of those problems that looks simple at a whiteboard and gets rapidly less simple in production. For most of 2025, our pricing path looked like a fan-out.
+              </BlockRow>
+              <BlockRow type="h2">The actor model, briefly</BlockRow>
+              <BlockRow type="p">
+                An actor is a tiny single-threaded process that owns some state and processes messages from an inbox in order. You can have millions of them. They don't share memory; they pass messages.
+              </BlockRow>
+              <BlockRow type="quote">
+                "If you find yourself adding a lock, you've already lost. The actor that owns the data should be the one doing the work."
+              </BlockRow>
+              <BlockRow type="image" />
+              <BlockRow type="code">
+{`const price = await corridor.send({
+  type: "quote", req, deadline: 80
+});`}
+              </BlockRow>
+              <BlockRow type="p" placeholder onClick={() => setShowSlash(true)}>
+                Type / for blocks…
+              </BlockRow>
+            </div>
+
+            {showSlash && <SlashMenu onClose={() => setShowSlash(false)} />}
+          </div>
+        </div>
+      </div>
+
+      <DashEditorRail />
+    </div>
+  );
+}
+
+function BlockRow({ type, children, placeholder, onClick }) {
+  const cls = {
+    p: "text-[16px] text-stone-800",
+    h2: "font-display font-bold text-[28px] tracking-[-0.025em] text-stone-900 mt-6 leading-tight",
+    quote: "border-l-2 border-puplar-700 pl-4 italic font-display text-[20px] text-stone-700",
+    code: "bg-stone-900 text-stone-100 font-mono text-[12.5px] rounded-md p-4 leading-[1.6] whitespace-pre",
+  };
+  return (
+    <div className="group relative flex items-start gap-1 -ml-10 pl-10" onClick={onClick}>
+      <div className="absolute left-0 top-1 opacity-0 group-hover:opacity-100 flex gap-0.5 transition">
+        <button className="text-stone-400 hover:bg-stone-100 rounded p-0.5"><Ic.Plus className="w-3.5 h-3.5" /></button>
+        <button className="text-stone-400 hover:bg-stone-100 rounded p-0.5 cursor-grab"><Ic.Drag className="w-3.5 h-3.5" /></button>
+      </div>
+      {type === "image" ? (
+        <div className="w-full">
+          <Thumb hue={192} w="100%" h={260} label="hero · drop image" className="rounded-lg w-full" />
+        </div>
+      ) : (
+        <div className={`flex-1 outline-none ${cls[type] || cls.p} ${placeholder ? "text-stone-400 cursor-text" : ""}`} contentEditable suppressContentEditableWarning>
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SlashMenu({ onClose }) {
+  const items = [
+    { i: Ic.H1, t: "Heading 1", d: "Big section title" },
+    { i: Ic.H2, t: "Heading 2", d: "Medium heading" },
+    { i: Ic.List, t: "Bulleted list", d: "Simple unordered list" },
+    { i: Ic.Quote, t: "Quote", d: "Pull quote / blockquote" },
+    { i: Ic.Code, t: "Code block", d: "Syntax-highlighted code" },
+    { i: Ic.Image, t: "Image", d: "Upload or pick from library" },
+    { i: Ic.Doc, t: "Embed", d: "Tweets, gists, videos" },
+  ];
+  return (
+    <div className="absolute z-30 bg-white border border-stone-200 rounded-lg shadow-lg w-[280px] py-1.5" style={{ left: 50, marginTop: -10 }}>
+      <div className="px-3 py-1.5 text-[10px] font-mono uppercase tracking-[0.1em] text-stone-500">Basic blocks</div>
+      {items.map((it) => {
+        const I = it.i;
+        return (
+          <button key={it.t} onClick={onClose} className="w-full flex items-start gap-2.5 px-3 py-2 hover:bg-stone-50 text-left">
+            <div className="w-7 h-7 rounded border border-stone-200 grid place-items-center text-stone-700 shrink-0">
+              <I className="w-3.5 h-3.5" />
+            </div>
+            <div>
+              <div className="text-[13px] font-semibold text-stone-900">{it.t}</div>
+              <div className="text-[11px] text-stone-500">{it.d}</div>
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function DashEditorRail() {
+  return (
+    <aside className="w-[300px] border-l border-stone-200 bg-stone-50/60 overflow-y-auto shrink-0">
+      <div className="p-5 flex flex-col gap-6">
+        <Section title="Publish">
+          <Field label="Status"><StatusPill status="draft" size="sm" /></Field>
+          <Field label="Visibility"><span className="text-[12.5px] text-stone-700">Public</span></Field>
+          <Field label="Schedule"><span className="text-[12.5px] text-violet-700 inline-flex items-center gap-1"><Ic.Calendar className="w-3 h-3" /> Set date…</span></Field>
+        </Section>
+        <Section title="Organize">
+          <Field label="Category">
+            <select className="text-[12.5px] border border-stone-200 rounded px-2 py-1 bg-white">
+              <option>Engineering</option><option>Product</option><option>Customers</option>
+            </select>
+          </Field>
+          <Field label="Tags" col>
+            <div className="flex flex-wrap gap-1 mt-1">
+              {["fx", "performance", "actor-model"].map((t) => (
+                <span key={t} className="inline-flex items-center gap-1 text-[11px] bg-white border border-stone-200 rounded-full px-2 py-0.5 text-stone-700">
+                  #{t}
+                  <button className="text-stone-400 hover:text-stone-700"><Ic.X className="w-2.5 h-2.5" /></button>
+                </span>
+              ))}
+              <button className="text-[11px] text-stone-500 border border-dashed border-stone-300 rounded-full px-2 py-0.5 hover:bg-white">+ Add</button>
+            </div>
+          </Field>
+        </Section>
+        <Section title="SEO">
+          <Field label="Slug" col><input value="fx-quote-latency" className="text-[12px] font-mono border border-stone-200 rounded px-2 py-1 bg-white w-full" readOnly /></Field>
+          <Field label="Meta description" col>
+            <textarea className="text-[12px] border border-stone-200 rounded px-2 py-1 bg-white w-full h-16 resize-none" defaultValue="How we rebuilt our pricing path on a single in-process actor model and cut median latency by 41%." />
+            <div className="text-[10px] text-stone-400 mt-1 font-mono">112 / 160</div>
+          </Field>
+        </Section>
+        <Section title="History">
+          {[
+            { who: "Tomás R.", w: "Edited body", t: "2s ago" },
+            { who: "Priya B.",  w: "Added review note", t: "8h ago" },
+            { who: "Tomás R.", w: "Created draft", t: "2d ago" },
+          ].map((h, i) => (
+            <div key={i} className="flex items-center gap-2 text-[12px]">
+              <Avatar name={h.who} size={18} />
+              <span className="text-stone-700 font-medium">{h.who}</span>
+              <span className="text-stone-500">{h.w}</span>
+              <span className="text-stone-400 ml-auto">{h.t}</span>
+            </div>
+          ))}
+        </Section>
+      </div>
+    </aside>
+  );
+}
+
+function Section({ title, children }) {
+  return (
+    <div>
+      <div className="text-[10px] font-mono uppercase tracking-[0.1em] text-stone-500 mb-2.5">{title}</div>
+      <div className="flex flex-col gap-2">{children}</div>
+    </div>
+  );
+}
+function Field({ label, children, col }) {
+  return (
+    <div className={col ? "flex flex-col gap-1" : "flex items-center justify-between gap-2"}>
+      <span className="text-[12px] text-stone-500">{label}</span>
+      {children}
+    </div>
+  );
+}
+
+window.DashEditor = DashEditor;
+
+</script>
+<script type="text/babel" data-presets="react">
+/* dash-views */
+// Upload modal, media library, categories/tags, analytics overview.
+
+function DashUploadModal() {
+  return (
+    <div className="absolute inset-0 z-50 bg-stone-900/40 backdrop-blur-sm grid place-items-center p-8">
+      <div className="bg-white rounded-xl border border-stone-200 shadow-2xl w-[640px] max-w-full overflow-hidden">
+        <div className="px-5 py-3.5 border-b border-stone-200 flex items-center justify-between">
+          <div>
+            <div className="font-display font-bold text-[16px] text-stone-900">Upload a new post</div>
+            <div className="text-[12px] text-stone-500">Drop a Markdown file or start from scratch.</div>
+          </div>
+          <button className="text-stone-400 hover:text-stone-700"><Ic.X className="w-4 h-4" /></button>
+        </div>
+        <div className="p-5 space-y-4">
+          <div className="border-2 border-dashed border-stone-300 rounded-lg p-8 grid place-items-center text-center bg-stone-50/60">
+            <div className="w-11 h-11 rounded-full bg-puplar-700/10 grid place-items-center text-puplar-700 mb-2">
+              <Ic.Upload className="w-5 h-5" />
+            </div>
+            <div className="font-display font-semibold text-[15px] text-stone-900">Drop files to upload</div>
+            <div className="text-[12px] text-stone-500 mt-0.5">.md, .mdx, .docx, .html — up to 25MB</div>
+            <button className="mt-3 text-[12px] font-semibold text-white bg-puplar-700 rounded-md px-3 py-1.5">Browse files</button>
+          </div>
+
+          <div className="rounded-lg border border-stone-200 p-3">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded bg-puplar-700/10 grid place-items-center text-puplar-700"><Ic.Doc className="w-4 h-4" /></div>
+              <div className="flex-1 min-w-0">
+                <div className="text-[13px] font-semibold text-stone-900 truncate">fx-quote-latency.mdx</div>
+                <div className="text-[11px] text-stone-500 font-mono">412 KB · uploading…</div>
+              </div>
+              <span className="text-[11px] text-stone-500 font-mono">68%</span>
+            </div>
+            <div className="mt-2 h-1 rounded-full bg-stone-100 overflow-hidden">
+              <div className="h-full bg-puplar-700 rounded-full" style={{ width: "68%" }} />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 text-[12px]">
+            <Card label="Category"><select className="border border-stone-200 rounded px-2 py-1.5 w-full bg-white text-[12.5px]"><option>Engineering</option><option>Product</option></select></Card>
+            <Card label="Author"><div className="flex items-center gap-2 px-2 py-1.5 border border-stone-200 rounded bg-white"><Avatar name="Tomás R." size={18} /><span className="text-[12.5px] text-stone-800">Tomás R.</span></div></Card>
+          </div>
+        </div>
+        <div className="px-5 py-3 border-t border-stone-200 bg-stone-50 flex items-center justify-end gap-2">
+          <button className="text-[12.5px] text-stone-700 px-3 py-1.5 hover:bg-stone-100 rounded-md">Cancel</button>
+          <button className="text-[12.5px] font-semibold text-white bg-puplar-700 rounded-md px-3 py-1.5">Save as draft</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Card({ label, children }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="text-[11px] font-mono uppercase tracking-[0.08em] text-stone-500">{label}</span>
+      {children}
+    </div>
+  );
+}
+
+function DashMedia() {
+  return (
+    <div className="flex-1 flex flex-col bg-stone-50 min-h-0">
+      <div className="px-8 pt-7 pb-5 flex items-end justify-between">
+        <div>
+          <h1 className="font-display font-bold text-[26px] tracking-[-0.02em] text-stone-900 m-0">Media</h1>
+          <p className="text-[13px] text-stone-500 mt-1">Hero images, diagrams, and assets used across posts.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button className="text-[13px] text-stone-700 border border-stone-200 bg-white rounded-md px-3 py-1.5 inline-flex items-center gap-1.5 hover:bg-stone-50">
+            <Ic.Folder className="w-3.5 h-3.5" /> New folder
+          </button>
+          <button className="text-[13px] font-semibold text-white bg-puplar-700 rounded-md px-3.5 py-1.5 inline-flex items-center gap-1.5">
+            <Ic.Upload className="w-3.5 h-3.5" /> Upload
+          </button>
+        </div>
+      </div>
+
+      <div className="px-8 pb-8 flex-1 overflow-y-auto">
+        <div className="grid grid-cols-4 gap-4">
+          <div className="border-2 border-dashed border-stone-300 rounded-lg bg-white grid place-items-center min-h-[180px] text-center px-4">
+            <div>
+              <div className="w-10 h-10 mx-auto rounded-full bg-puplar-700/10 grid place-items-center text-puplar-700 mb-2"><Ic.Upload className="w-4 h-4" /></div>
+              <div className="text-[13px] font-semibold text-stone-900">Drop to upload</div>
+              <div className="text-[11px] text-stone-500 mt-0.5">PNG, JPG, SVG, MP4</div>
+            </div>
+          </div>
+          {DASH_MEDIA.map((m) => (
+            <div key={m.id} className="bg-white border border-stone-200 rounded-lg overflow-hidden group hover:border-stone-300">
+              <div className="relative">
+                <Thumb hue={m.hue} w="100%" h={140} className="w-full" />
+                <div className="absolute top-2 right-2 text-[10px] font-mono uppercase bg-white/85 backdrop-blur px-1.5 py-0.5 rounded">{m.type}</div>
+                {m.used > 0 && <div className="absolute bottom-2 left-2 text-[10px] font-mono bg-stone-900/80 text-white px-1.5 py-0.5 rounded">used in {m.used}</div>}
+              </div>
+              <div className="p-2.5">
+                <div className="text-[12.5px] font-medium text-stone-900 truncate">{m.name}</div>
+                <div className="text-[11px] text-stone-500 font-mono">{m.w}×{m.h} · {m.size}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DashTaxonomy() {
+  return (
+    <div className="flex-1 flex bg-stone-50 min-h-0">
+      <div className="flex-1 px-8 pt-7 pb-8 overflow-y-auto">
+        <div className="flex items-end justify-between mb-5">
+          <div>
+            <h1 className="font-display font-bold text-[26px] tracking-[-0.02em] text-stone-900 m-0">Categories</h1>
+            <p className="text-[13px] text-stone-500 mt-1">Top-level sections of the blog.</p>
+          </div>
+          <button className="text-[13px] font-semibold text-white bg-puplar-700 rounded-md px-3 py-1.5 inline-flex items-center gap-1.5">
+            <Ic.Plus className="w-3.5 h-3.5" /> New category
+          </button>
+        </div>
+
+        <div className="bg-white border border-stone-200 rounded-lg overflow-hidden">
+          {DASH_CATEGORIES.map((c, i) => (
+            <div key={c.id} className={`flex items-center gap-3 px-4 py-3 ${i ? "border-t border-stone-100" : ""} hover:bg-stone-50/70`}>
+              <Ic.Drag className="w-3.5 h-3.5 text-stone-400 cursor-grab" />
+              <div className="w-2 h-2 rounded-full" style={{ background: c.color }} />
+              <div className="flex-1">
+                <div className="text-[13.5px] font-semibold text-stone-900">{c.name}</div>
+                <div className="text-[11.5px] text-stone-500 font-mono">/blog/{c.id}</div>
+              </div>
+              <span className="text-[12px] text-stone-500">{c.count} posts</span>
+              <button className="text-stone-400 hover:text-stone-700"><Ic.More className="w-4 h-4" /></button>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-8 flex items-end justify-between mb-3">
+          <h2 className="font-display font-bold text-[18px] tracking-[-0.015em] text-stone-900 m-0">Tags</h2>
+          <button className="text-[12px] text-stone-700 border border-stone-200 bg-white rounded-md px-2.5 py-1 hover:bg-stone-50">Manage all</button>
+        </div>
+        <div className="bg-white border border-stone-200 rounded-lg p-4 flex flex-wrap gap-1.5">
+          {DASH_TAGS.map((t) => {
+            const size = 0.7 + (t.length % 5) * 0.06;
+            return (
+              <span key={t} className="inline-flex items-center text-stone-700 bg-stone-100 hover:bg-stone-200 rounded-full px-2.5 py-1 cursor-pointer" style={{ fontSize: `${11 + size * 4}px` }}>
+                #{t}
+                <span className="ml-1.5 text-stone-400 font-mono text-[10px]">{Math.floor(2 + (t.charCodeAt(0) % 13))}</span>
+              </span>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DashAnalytics() {
+  const stats = [
+    { k: "Total views",    v: "284k",  d: "+18% MoM",   color: "text-emerald-700" },
+    { k: "Avg read time",  v: "4:12",  d: "+0:21",      color: "text-emerald-700" },
+    { k: "Subscribers",    v: "9,142", d: "+312 / mo",  color: "text-stone-900" },
+    { k: "Bounce",         v: "31%",   d: "-2.3pp",     color: "text-emerald-700" },
+  ];
+  const top = DASH_POSTS.filter(p => p.status === "published").slice(0, 5);
+  const max = 31200;
+  return (
+    <div className="flex-1 bg-stone-50 overflow-y-auto">
+      <div className="px-8 pt-7 pb-8">
+        <div className="flex items-end justify-between mb-5">
+          <div>
+            <h1 className="font-display font-bold text-[26px] tracking-[-0.02em] text-stone-900 m-0">Overview</h1>
+            <p className="text-[13px] text-stone-500 mt-1">Last 30 days · all sources</p>
+          </div>
+          <div className="bg-white border border-stone-200 rounded-md flex p-0.5 text-[12px]">
+            {["7d", "30d", "90d", "All"].map((p, i) => (
+              <button key={p} className={`px-2.5 py-1 rounded ${i === 1 ? "bg-stone-100 text-stone-900 font-semibold" : "text-stone-500"}`}>{p}</button>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-4 gap-3 mb-6">
+          {stats.map((s) => (
+            <div key={s.k} className="bg-white border border-stone-200 rounded-lg px-4 py-3.5">
+              <div className="text-[11px] font-mono uppercase tracking-[0.1em] text-stone-500">{s.k}</div>
+              <div className={`font-display text-[30px] font-bold tracking-[-0.025em] mt-0.5 leading-none ${s.color}`}>{s.v}</div>
+              <div className="text-[12px] text-stone-500 mt-2">{s.d}</div>
+            </div>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-3 gap-4">
+          <div className="col-span-2 bg-white border border-stone-200 rounded-lg p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <div className="text-[11px] font-mono uppercase tracking-[0.1em] text-stone-500">Views</div>
+                <div className="font-display text-[22px] font-bold tracking-[-0.02em] text-stone-900 leading-none mt-1">12,840 <span className="text-[12px] text-emerald-700 font-sans font-medium ml-1">+8.4%</span></div>
+              </div>
+              <div className="flex gap-3 text-[11px]">
+                <span className="inline-flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-puplar-700" /> This period</span>
+                <span className="inline-flex items-center gap-1.5 text-stone-500"><span className="w-2 h-2 rounded-full bg-stone-300" /> Previous</span>
+              </div>
+            </div>
+            <Sparkline />
+          </div>
+          <div className="bg-white border border-stone-200 rounded-lg p-5">
+            <div className="text-[11px] font-mono uppercase tracking-[0.1em] text-stone-500 mb-3">Top posts</div>
+            <div className="flex flex-col gap-3">
+              {top.map((p, i) => {
+                const v = parseFloat(p.views) * (p.views.includes("k") ? 1000 : 1) || 5000;
+                return (
+                  <div key={p.id}>
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <span className="text-[12.5px] font-medium text-stone-800 truncate">{p.title}</span>
+                      <span className="text-[11px] font-mono text-stone-500">{p.views}</span>
+                    </div>
+                    <div className="h-1.5 bg-stone-100 rounded-full overflow-hidden">
+                      <div className="h-full bg-puplar-700 rounded-full" style={{ width: `${(v / max) * 100}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Sparkline() {
+  const pts = [12, 18, 14, 22, 28, 24, 32, 30, 38, 34, 42, 40, 48, 46, 52, 50, 58, 54, 62, 68, 60, 70, 74, 72, 80, 78, 84, 88, 92, 96];
+  const ppts = pts.map(v => v * 0.78 - 4);
+  const W = 640, H = 180;
+  const toPath = (arr) => arr.map((v, i) => `${i === 0 ? "M" : "L"} ${(i / (arr.length - 1)) * W} ${H - (v / 100) * (H - 10)}`).join(" ");
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-[180px]">
+      <defs>
+        <linearGradient id="grad" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#0d9488" stopOpacity=".18" /><stop offset="100%" stopColor="#0d9488" stopOpacity="0" /></linearGradient>
+      </defs>
+      {[0, 1, 2, 3].map(i => <line key={i} x1="0" x2={W} y1={(H / 4) * i} y2={(H / 4) * i} stroke="#f5f5f4" />)}
+      <path d={`${toPath(pts)} L ${W} ${H} L 0 ${H} Z`} fill="url(#grad)" />
+      <path d={toPath(ppts)} stroke="#d6d3d1" strokeWidth="1.5" fill="none" strokeDasharray="3 3" />
+      <path d={toPath(pts)} stroke="#0f766e" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+Object.assign(window, { DashUploadModal, DashMedia, DashTaxonomy, DashAnalytics });
+
+</script>
+
+<script type="text/babel" data-presets="react">
+function Frame({ children, active, screen, withModal }) {
+  return (
+    <div data-screen-label={screen} className="artboard relative w-full h-full bg-white overflow-hidden flex">
+      <DashSidebar active={active} />
+      <div className="flex-1 flex flex-col min-w-0">
+        <DashTopBar breadcrumbs={[]} title="Studio" />
+        {children}
+      </div>
+      {withModal && <DashUploadModal />}
+    </div>
+  );
+}
+
+function App() {
+  const W = 1440, H = 900;
+  return (
+    <DesignCanvas>
+      <DCSection id="lists" title="Posts list" subtitle="Manage and triage all blog content. Default landing screen for editors.">
+        <DCArtboard id="posts-table" label="01 · Posts (table view)" width={W} height={H}>
+          <Frame active="posts" screen="01 Posts table">
+            <DashPostsTable />
+          </Frame>
+        </DCArtboard>
+        <DCArtboard id="posts-kanban" label="02 · Posts (kanban view)" width={W} height={H}>
+          <Frame active="posts" screen="02 Posts kanban">
+            <DashPostsKanban />
+          </Frame>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="upload" title="Upload & create" subtitle="Modal flow + Notion-style block editor with publish rail.">
+        <DCArtboard id="upload-modal" label="03 · Upload modal" width={W} height={H}>
+          <Frame active="posts" screen="03 Upload" withModal>
+            <DashPostsTable />
+          </Frame>
+        </DCArtboard>
+        <DCArtboard id="editor" label="04 · Block editor" width={W} height={H}>
+          <Frame active="posts" screen="04 Editor">
+            <DashEditor />
+          </Frame>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="library" title="Library & taxonomy" subtitle="Reusable assets and the structures that organize the blog.">
+        <DCArtboard id="media" label="05 · Media library" width={W} height={H}>
+          <Frame active="media" screen="05 Media">
+            <DashMedia />
+          </Frame>
+        </DCArtboard>
+        <DCArtboard id="taxonomy" label="06 · Categories & tags" width={W} height={H}>
+          <Frame active="taxonomy" screen="06 Taxonomy">
+            <DashTaxonomy />
+          </Frame>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="overview" title="Analytics" subtitle="At-a-glance health of the blog: views, top posts, subscribers.">
+        <DCArtboard id="analytics" label="07 · Overview" width={W} height={H}>
+          <Frame active="overview" screen="07 Overview">
+            <DashAnalytics />
+          </Frame>
+        </DCArtboard>
+      </DCSection>
+    </DesignCanvas>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
