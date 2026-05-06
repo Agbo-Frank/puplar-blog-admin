@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { EditorContent } from '@tiptap/react';
 import type { Editor } from '@tiptap/core';
 import { Ic } from '../../../components/icons';
-import { MediaPickerModal } from '../../../components/material/MediaPickerModal';
+import { MediaPickerModal } from '../../../components/modal/media-picker';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -29,25 +29,25 @@ export function EditorCanvas({
   editor, title, excerpt, category, status,
   onTitleChange, onExcerptChange,
 }: EditorCanvasProps) {
-  const titleSeeded   = useRef(false);
+  const titleSeeded = useRef(false);
   const excerptSeeded = useRef(false);
-  const slashRef      = useRef<HTMLDivElement>(null);
+  const slashRef = useRef<HTMLDivElement>(null);
 
-  const [showSlash,  setShowSlash]  = useState(false);
+  const [showSlash, setShowSlash] = useState(false);
   const [slashQuery, setSlashQuery] = useState('');
-  const [slashPos,   setSlashPos]   = useState({ top: 0, left: 0 });
-  const [activeIdx,  setActiveIdx]  = useState(0);
+  const [slashPos, setSlashPos] = useState({ top: 0, left: 0 });
+  const [activeIdx, setActiveIdx] = useState(0);
 
   const [showMediaPick, setShowMediaPick] = useState(false);
 
   // ── Slash items ────────────────────────────────────────────────────────────
   const allItems: SlashItem[] = editor ? [
-    { icon: Ic.H1,    label: 'Heading 1',     desc: 'Big section title',          command: () => editor.chain().focus().toggleHeading({ level: 1 }).run() },
-    { icon: Ic.H2,    label: 'Heading 2',     desc: 'Medium heading',             command: () => editor.chain().focus().toggleHeading({ level: 2 }).run() },
-    { icon: Ic.List,  label: 'Bulleted list', desc: 'Simple unordered list',      command: () => editor.chain().focus().toggleBulletList().run() },
-    { icon: Ic.Quote, label: 'Quote',         desc: 'Pull quote / blockquote',    command: () => editor.chain().focus().toggleBlockquote().run() },
-    { icon: Ic.Code,  label: 'Code block',    desc: 'Syntax-highlighted code',    command: () => editor.chain().focus().toggleCodeBlock().run() },
-    { icon: Ic.Image, label: 'Image',         desc: 'Insert from media library',  command: () => setShowMediaPick(true) },
+    { icon: Ic.H1, label: 'Heading 1', desc: 'Big section title', command: () => editor.chain().focus().toggleHeading({ level: 1 }).run() },
+    { icon: Ic.H2, label: 'Heading 2', desc: 'Medium heading', command: () => editor.chain().focus().toggleHeading({ level: 2 }).run() },
+    { icon: Ic.List, label: 'Bulleted list', desc: 'Simple unordered list', command: () => editor.chain().focus().toggleBulletList().run() },
+    { icon: Ic.Quote, label: 'Quote', desc: 'Pull quote / blockquote', command: () => editor.chain().focus().toggleBlockquote().run() },
+    { icon: Ic.Code, label: 'Code block', desc: 'Syntax-highlighted code', command: () => editor.chain().focus().toggleCodeBlock().run() },
+    { icon: Ic.Image, label: 'Image', desc: 'Insert from media library', command: () => setShowMediaPick(true) },
   ] : [];
 
   const filtered = allItems.filter(
@@ -92,9 +92,9 @@ export function EditorCanvas({
   useEffect(() => {
     if (!showSlash) return;
     function handle(e: KeyboardEvent) {
-      if (e.key === 'Escape')    { setShowSlash(false); return; }
+      if (e.key === 'Escape') { setShowSlash(false); return; }
       if (e.key === 'ArrowDown') { e.preventDefault(); setActiveIdx((i) => Math.min(i + 1, filtered.length - 1)); return; }
-      if (e.key === 'ArrowUp')   { e.preventDefault(); setActiveIdx((i) => Math.max(i - 1, 0)); return; }
+      if (e.key === 'ArrowUp') { e.preventDefault(); setActiveIdx((i) => Math.max(i - 1, 0)); return; }
       if (e.key === 'Enter' && filtered[activeIdx]) { e.preventDefault(); applySlashItem(filtered[activeIdx]); }
     }
     document.addEventListener('keydown', handle);
@@ -175,9 +175,8 @@ export function EditorCanvas({
                   <button
                     key={item.label}
                     onMouseDown={(e) => { e.preventDefault(); applySlashItem(item); }}
-                    className={`w-full flex items-start gap-2.5 px-3 py-2 text-left transition ${
-                      i === activeIdx ? 'bg-stone-100' : 'hover:bg-stone-50'
-                    }`}
+                    className={`w-full flex items-start gap-2.5 px-3 py-2 text-left transition ${i === activeIdx ? 'bg-stone-100' : 'hover:bg-stone-50'
+                      }`}
                   >
                     <div className="w-7 h-7 rounded border border-stone-200 grid place-items-center text-stone-700 shrink-0">
                       <Icon className="w-3.5 h-3.5" />

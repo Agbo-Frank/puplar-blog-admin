@@ -1,6 +1,9 @@
 import { Link, useLocation } from 'react-router-dom';
 import { Ic } from '../icons';
 import { Logo } from '../material';
+import { useMutation } from '@/hooks/use-api';
+import { useStore } from '@/hooks/use-store';
+import { endpoints } from '@/api/endpoints';
 
 interface NavItem {
   id: string;
@@ -25,6 +28,16 @@ interface DashSidebarProps {
 
 export function DashSidebar({ collapsed = false, onCollapse }: DashSidebarProps) {
   const { pathname } = useLocation();
+  const { unsetAuth } = useStore();
+  const { trigger: logout, isLoading: loggingOut } = useMutation(endpoints.logout, {
+    method: 'POST',
+    skipErrorHandling: true,
+  });
+
+  async function handleLogout() {
+    await logout();
+    unsetAuth();
+  }
   const w = collapsed ? 'w-[60px]' : 'w-[232px]';
 
   return (
@@ -101,8 +114,8 @@ export function DashSidebar({ collapsed = false, onCollapse }: DashSidebarProps)
         </div>
       )}
 
-      {/* Settings */}
-      <div className={`border-t border-stone-200 ${collapsed ? 'p-2' : 'p-3'}`}>
+      {/* Settings + Logout */}
+      <div className={`border-t border-stone-200 ${collapsed ? 'p-2 flex flex-col gap-1' : 'p-3 flex flex-col gap-1'}`}>
         <Link
           to="/settings"
           className={`flex items-center gap-2 ${collapsed ? 'justify-center' : ''} text-[13px] text-stone-600 hover:text-stone-900 transition`}
@@ -110,6 +123,14 @@ export function DashSidebar({ collapsed = false, onCollapse }: DashSidebarProps)
           <Ic.Settings className="w-4 h-4" />
           {!collapsed && <span>Settings</span>}
         </Link>
+        <button
+          onClick={handleLogout}
+          disabled={loggingOut}
+          className={`flex items-center gap-2 ${collapsed ? 'justify-center' : ''} text-[13px] text-stone-600 hover:text-red-600 transition disabled:opacity-50 cursor-pointer`}
+        >
+          <Ic.Logout className="w-4 h-4" />
+          {!collapsed && <span>Sign out</span>}
+        </button>
       </div>
     </aside>
   );

@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { DashTopBar } from '../../components/layout/top-bar';
 import { Ic } from '../../components/icons';
-import { StatusPill, Avatar, Thumb } from '../../components/material';
-import { ImportModal } from '../../components/material/ImportModal';
+import { StatusPill, Avatar, Thumb, Button } from '../../components/material';
+import { ImportModal } from '../../components/modal/import';
 import { DASH_POSTS } from '../../data/admin';
 import type { PostStatus } from '../../types/admin';
 
@@ -83,12 +83,9 @@ export default function PostsPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowImport(true)}
-              className="text-[13px] text-stone-700 border border-stone-200 bg-white rounded-md px-3 py-1.5 inline-flex items-center gap-1.5 hover:bg-stone-50 transition"
-            >
+            <Button variant="secondary" onClick={() => setShowImport(true)}>
               <Ic.Upload className="w-3.5 h-3.5" /> Import
-            </button>
+            </Button>
             <Link
               to="/posts/new"
               className="text-[13px] font-semibold text-white bg-puplar-700 hover:bg-puplar-900 rounded-md px-3.5 py-1.5 inline-flex items-center gap-1.5 transition"
@@ -136,15 +133,15 @@ export default function PostsPage() {
               })}
             </div>
             <div className="flex items-center gap-1.5 pb-2">
-              <button className="text-[12px] text-stone-600 border border-stone-200 rounded-md px-2.5 py-1 inline-flex items-center gap-1.5 hover:bg-stone-50 transition">
+              <Button variant="secondary" size="sm">
                 <Ic.Filter className="w-3.5 h-3.5" /> Filter
-              </button>
-              <button className="text-[12px] text-stone-600 border border-stone-200 rounded-md px-2.5 py-1 inline-flex items-center gap-1.5 hover:bg-stone-50 transition">
+              </Button>
+              <Button variant="secondary" size="sm">
                 <Ic.Sort className="w-3.5 h-3.5" /> Sort: Recent
-              </button>
-              <button className="text-[12px] text-stone-600 border border-stone-200 rounded-md px-2 py-1 hover:bg-stone-50 transition">
+              </Button>
+              <Button variant="secondary" size="sm" className="px-2">
                 <Ic.More className="w-3.5 h-3.5" />
-              </button>
+              </Button>
             </div>
           </div>
 

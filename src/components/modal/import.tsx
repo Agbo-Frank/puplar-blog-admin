@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { Ic } from '../icons';
-import { Avatar } from './index';
+import { Avatar } from '../material';
 import { DASH_CATEGORIES } from '../../data/admin';
 
 interface ImportModalProps {
