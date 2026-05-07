@@ -170,8 +170,9 @@ export function useCategories() {
   const { isLoading } = useApi<ICategory[]>(
     hasCache ? null : endpoints.categories,
     {
-      onSuccess: (res: ApiResponse<ICategory[]>) => {
-        if (res.data) setCategories(res.data);
+      onSuccess: (res: ApiResponse<unknown>) => {
+        const data = (res as ApiResponse<ICategory[]>).data;
+        if (data) setCategories(data);
       },
     }
   );

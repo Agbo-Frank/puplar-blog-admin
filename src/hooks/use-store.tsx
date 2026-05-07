@@ -81,7 +81,7 @@ export function StoreProvider({ children }: PropsWithChildren) {
       const userRaw = localStorage.getItem(STORAGE_KEYS.USER);
       const auth    = authRaw ? parseJson<IAuth>(authRaw)               : null;
       const user    = userRaw ? parseJson<IAdminProfile>(userRaw)       : null;
-      setState({ auth, user });
+      setState({ auth, user, categories: [] });
     } catch (error) {
       console.error("Error loading from storage:", error);
     } finally {
