@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { DashTopBar } from '../../components/layout/top-bar';
 import { Ic } from '../../components/icons';
 import { Button, IconButton } from '../../components/material';
-import { useApi, useMutation } from '@/hooks/use-api';
+import { useApi, useCategories, useMutation } from '@/hooks/use-api';
 import { endpoints } from '@/api/endpoints';
 import type { ICategory, ITag } from '@/api/types';
 import { CategoryFormModal } from './category-form-modal';
@@ -15,17 +15,16 @@ export default function TaxonomyPage() {
   const [showAddCat, setShowAddCat] = useState(false);
   const [editingCat, setEditingCat] = useState<ICategory | null>(null);
   const [deletingCat, setDeletingCat] = useState<ICategory | null>(null);
-  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [openMenu, setOpenMenu] = useState<{ id: string; anchor: HTMLElement } | null>(null);
   const [tagEditMode, setTagEditMode] = useState(false);
   const [newTag, setNewTag] = useState('');
   const [showTagInput, setShowTagInput] = useState(false);
 
   // ── Data fetching ────────────────────────────────────────────────────────────
 
-  const { data: catRes, isLoading: catsLoading } = useApi<ICategory[]>(endpoints.categories);
+  const { categories, isLoading: catsLoading } = useCategories();
   const { data: tagRes, isLoading: tagsLoading } = useApi<ITag[]>(endpoints.tags);
 
-  const categories = catRes?.data ?? [];
   const tags = tagRes?.data ?? [];
 
   // ── Tag mutations ────────────────────────────────────────────────────────────
@@ -78,7 +77,7 @@ export default function TaxonomyPage() {
             {!catsLoading && categories.length === 0 && (
               <div className="px-4 py-8 text-center text-[13px] text-stone-400">No categories yet.</div>
             )}
-            {categories.map((c, i) => (
+            {categories?.map((c, i) => (
               <div
                 key={c._id}
                 className={`flex items-center gap-3 px-4 py-3 ${i ? 'border-t border-stone-100' : ''} hover:bg-stone-50/70 transition`}
@@ -89,19 +88,20 @@ export default function TaxonomyPage() {
                   <div className="text-[11.5px] text-stone-500 font-mono">/blog/{c.slug}</div>
                 </div>
                 <span className="text-[12px] text-stone-500">{c.post_count} posts</span>
-                <div className="relative">
+                <div>
                   <button
-                    onClick={() => setOpenMenuId(openMenuId === c._id ? null : c._id)}
-                    className={`text-stone-400 hover:text-stone-700 transition rounded p-0.5 ${openMenuId === c._id ? 'bg-stone-100 text-stone-700' : ''}`}
+                    onClick={(e) => setOpenMenu(openMenu?.id === c._id ? null : { id: c._id, anchor: e.currentTarget })}
+                    className={`text-stone-400 hover:text-stone-700 transition rounded p-0.5 ${openMenu?.id === c._id ? 'bg-stone-100 text-stone-700' : ''}`}
                   >
                     <Ic.More className="w-4 h-4" />
                   </button>
-                  {openMenuId === c._id && (
+                  {openMenu?.id === c._id && (
                     <RowMenu
+                      anchor={openMenu.anchor}
                       category={c}
                       onEdit={() => setEditingCat(c)}
                       onDelete={() => setDeletingCat(c)}
-                      onClose={() => setOpenMenuId(null)}
+                      onClose={() => setOpenMenu(null)}
                     />
                   )}
                 </div>

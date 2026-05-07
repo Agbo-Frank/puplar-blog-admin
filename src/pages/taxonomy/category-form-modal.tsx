@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Ic } from '../../components/icons';
 import { Button, IconButton } from '../../components/material';
 import { useMutation } from '@/hooks/use-api';
+import { useStore } from '@/hooks/use-store';
 import { endpoints } from '@/api/endpoints';
 import type { ICategory, CreateCategoryPayload, UpdateCategoryPayload } from '@/api/types';
 
@@ -16,6 +17,7 @@ export interface CategoryFormModalProps {
 }
 
 export function CategoryFormModal({ initial, onClose }: CategoryFormModalProps) {
+  const { setCategories } = useStore();
   const [name, setName] = useState(initial?.name ?? '');
   const [color, setColor] = useState(initial?.color ?? COLOR_SWATCHES[0]);
   const isEdit = !!initial;
@@ -26,12 +28,12 @@ export function CategoryFormModal({ initial, onClose }: CategoryFormModalProps) 
 
   const { trigger: createCat, isLoading: creating } = useMutation<ICategory, CreateCategoryPayload>(
     endpoints.categories,
-    { invalidate: [endpoints.categories] }
+    { onSuccess: () => setCategories([]) }
   );
 
   const { trigger: updateCat, isLoading: updating } = useMutation<ICategory, UpdateCategoryPayload>(
     endpoints.categoryDetails,
-    { method: 'PUT', invalidate: [endpoints.categories] }
+    { method: 'PUT', onSuccess: () => setCategories([]) }
   );
 
   const saving = creating || updating;

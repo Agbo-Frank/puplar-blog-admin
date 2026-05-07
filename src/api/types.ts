@@ -187,6 +187,22 @@ export interface CreateTagPayload {
   slug: string;
 }
 
+export interface IPostStats {
+  total_count:        number;
+  draft_count:        number;
+  review_count:       number;
+  scheduled_count:    number;
+  published_30d:      number;
+  published_prev_30d: number;
+  next_scheduled_at:  string | null;
+}
+
+export interface IPostListItem extends Omit<IPost, 'category' | 'author' | 'featured_image'> {
+  category:       Pick<ICategory, '_id' | 'name' | 'color' | 'slug'> | null;
+  author:         Pick<IAuthor,   '_id' | 'name'> | null;
+  featured_image: Pick<IMedia,    '_id' | 'url' | 'name' | 'type'> | null;
+}
+
 // ── Media ─────────────────────────────────────────────────────────────────────
 
 export interface IMedia {

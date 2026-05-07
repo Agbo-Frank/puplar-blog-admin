@@ -2,10 +2,12 @@ import useSWR, { type SWRConfiguration } from "swr";
 import { del, fetcher, get, patch, post, put } from "@/api/fetcher";
 import useSWRMutation from "swr/mutation";
 import { useSWRConfig } from "swr";
-import type { ApiError, ApiResponse } from "@/api/types";
+import type { ApiError, ApiResponse, ICategory } from "@/api/types";
+import { endpoints } from "@/api/endpoints";
 import { cleanPayload, replacePathParams } from "@/utils";
 import { toast } from "sonner";
 import type { FormikProps } from "formik";
+import { useStore } from "./use-store";
 
 export interface UseApiOptions {
   pathParams?: Record<string, string | number>;
@@ -156,5 +158,31 @@ export function useMutation<TResponse = unknown, TRequest = unknown>(
     error,
     isLoading: isMutating,
     reset,
+  };
+}
+
+// ─── useCategories ────────────────────────────────────────────────────────────
+
+export function useCategories() {
+  const { categories, setCategories } = useStore();
+  const hasCache = categories?.length > 0;
+
+  const { isLoading } = useApi<ICategory[]>(
+    hasCache ? null : endpoints.categories,
+    {
+      onSuccess: (res: ApiResponse<ICategory[]>) => {
+        if (res.data) setCategories(res.data);
+      },
+    }
+  );
+
+  function revalidate() {
+    setCategories([]); // clears cache → next render triggers a fresh fetch
+  }
+
+  return {
+    categories,
+    isLoading: !hasCache && isLoading,
+    revalidate,
   };
 }

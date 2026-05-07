@@ -11,7 +11,8 @@ export const endpoints = {
   me: "/profile/profile",
 
   // Posts
-  posts:      "/posts",
+  posts:       "/posts",
+  postStats:   "/posts/stats",
   postDetails: "/posts/:id",
   postBySlug:  "/posts/slug/:slug",
   postStatus:  "/posts/:id/status",

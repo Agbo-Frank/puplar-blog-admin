@@ -1,6 +1,7 @@
 import { Ic } from '../../components/icons';
 import { Button } from '../../components/material';
 import { useMutation } from '@/hooks/use-api';
+import { useStore } from '@/hooks/use-store';
 import { endpoints } from '@/api/endpoints';
 import type { ICategory } from '@/api/types';
 
@@ -10,9 +11,10 @@ export interface DeleteConfirmModalProps {
 }
 
 export function DeleteConfirmModal({ category, onClose }: DeleteConfirmModalProps) {
+  const { setCategories } = useStore();
   const { trigger: deleteCat, isLoading: deleting } = useMutation(
     endpoints.categoryDetails,
-    { method: 'DELETE', invalidate: [endpoints.categories] }
+    { method: 'DELETE', onSuccess: () => setCategories([]) }
   );
 
   async function handleConfirm() {

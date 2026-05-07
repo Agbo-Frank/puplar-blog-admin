@@ -5,7 +5,7 @@ import { Thumb, Button } from '../../components/material';
 import { useApi, useMutation } from '@/hooks/use-api';
 import { endpoints } from '@/api/endpoints';
 import { post } from '@/api/fetcher';
-import type { IMedia } from '@/api/types';
+import type { IMedia, IPagination } from '@/api/types';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -36,8 +36,8 @@ export default function MediaPage() {
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const { data: mediaRes, isLoading, mutate } = useApi<IMedia[]>(endpoints.media);
-  const media = mediaRes?.data ?? [];
+  const { data: mediaRes, isLoading, mutate } = useApi<IPagination<IMedia>>(endpoints.media);
+  const media = mediaRes?.data?.docs ?? [];
 
   const { trigger: deleteMedia } = useMutation(
     endpoints.mediaDetails,

@@ -59,6 +59,11 @@ client.interceptors.request.use((config) => {
     config.headers.Authorization = `Bearer ${token.access_token}`;
   }
 
+  // Let the browser set Content-Type (with boundary) for multipart uploads
+  if (config.data instanceof FormData) {
+    delete config.headers["Content-Type"];
+  }
+
   return config;
 });
 

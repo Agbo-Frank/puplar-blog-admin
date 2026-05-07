@@ -4,25 +4,79 @@ import { DashTopBar } from '../../components/layout/top-bar';
 import { Ic } from '../../components/icons';
 import { StatusPill, Avatar, Thumb, Button } from '../../components/material';
 import { ImportModal } from '../../components/modal/import';
-import { DASH_POSTS } from '../../data/admin';
-import type { PostStatus } from '../../types/admin';
+import { useApi, useMutation } from '@/hooks/use-api';
+import { endpoints } from '@/api/endpoints';
+import type { IPostListItem, IPostStats, IPagination, PostStatus } from '@/api/types';
+import dayjs from 'dayjs';
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function hueFromId(id: string): number {
+  return parseInt(id.slice(-6), 16) % 360;
+}
+
+function formatDelta(current: number, prev: number): string {
+  const diff = current - prev;
+  if (diff === 0) return 'Same as prev 30d';
+  return `${diff > 0 ? '+' : ''}${diff} vs prev 30d`;
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
 type Tab = PostStatus | 'all';
 
 export default function PostsPage() {
-  const [tab, setTab] = useState<Tab>('all');
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [tab, setTab]             = useState<Tab>('all');
+  const [page, setPage]           = useState(1);
+  const [selected, setSelected]   = useState<Set<string>>(new Set());
   const [showImport, setShowImport] = useState(false);
 
+  // ── Data fetching ────────────────────────────────────────────────────────────
+
+  const { data: postsRes, isLoading: postsLoading } = useApi<IPagination<IPostListItem>>(
+    endpoints.posts,
+    { pathParams: tab === 'all' ? { page } : { page, status: tab } }
+  );
+
+  const { data: statsRes } = useApi<IPostStats>(endpoints.postStats);
+
+  const { trigger: deletePosts } = useMutation(endpoints.posts, {
+    method: 'DELETE',
+    invalidate: [endpoints.posts, endpoints.postStats],
+  });
+
+  const posts      = postsRes?.data?.docs      ?? [];
+  const total      = postsRes?.data?.totalDocs ?? 0;
+  const totalPages = postsRes?.data?.totalPages ?? 1;
+  const stats      = statsRes?.data;
+
+  // ── Tabs ─────────────────────────────────────────────────────────────────────
+
   const tabs: { id: Tab; label: string }[] = [
-    { id: 'all', label: 'All' },
+    { id: 'all',       label: 'All' },
     { id: 'published', label: 'Published' },
     { id: 'scheduled', label: 'Scheduled' },
-    { id: 'review', label: 'In review' },
-    { id: 'draft', label: 'Drafts' },
+    { id: 'review',    label: 'In review' },
+    { id: 'draft',     label: 'Drafts' },
   ];
 
-  const visible = tab === 'all' ? DASH_POSTS : DASH_POSTS.filter((p) => p.status === tab);
+  function tabCount(t: Tab): number {
+    if (!stats) return 0;
+    if (t === 'all')       return stats.total_count;
+    if (t === 'draft')     return stats.draft_count;
+    if (t === 'review')    return stats.review_count;
+    if (t === 'scheduled') return stats.scheduled_count;
+    if (t === 'published') return stats.published_30d;
+    return 0;
+  }
+
+  function changeTab(t: Tab) {
+    setTab(t);
+    setPage(1);
+    setSelected(new Set());
+  }
+
+  // ── Selection ────────────────────────────────────────────────────────────────
 
   const toggle = (id: string) => {
     setSelected((prev) => {
@@ -33,36 +87,42 @@ export default function PostsPage() {
   };
 
   const toggleAll = () => {
-    if (selected.size === visible.length) {
+    if (selected.size === posts.length) {
       setSelected(new Set());
     } else {
-      setSelected(new Set(visible.map((p) => p.id)));
+      setSelected(new Set(posts.map((p) => p._id)));
     }
   };
+
+  // ── Stat cards ───────────────────────────────────────────────────────────────
+
+  const nextSched = stats?.next_scheduled_at
+    ? dayjs(stats.next_scheduled_at).format('MMM D HH:mm')
+    : '—';
 
   const statCards = [
     {
       k: 'Drafts',
-      v: DASH_POSTS.filter((p) => p.status === 'draft').length,
+      v: stats?.draft_count ?? '—',
       d: '+2 this week',
       color: 'text-stone-700',
     },
     {
       k: 'In review',
-      v: DASH_POSTS.filter((p) => p.status === 'review').length,
+      v: stats?.review_count ?? '—',
       d: '1 needs sign-off',
       color: 'text-amber-700',
     },
     {
       k: 'Scheduled',
-      v: DASH_POSTS.filter((p) => p.status === 'scheduled').length,
-      d: 'Next: Apr 30 14:00',
+      v: stats?.scheduled_count ?? '—',
+      d: `Next: ${nextSched}`,
       color: 'text-violet-700',
     },
     {
       k: 'Published 30d',
-      v: DASH_POSTS.filter((p) => p.status === 'published').length,
-      d: '+3 vs prev 30d',
+      v: stats?.published_30d ?? '—',
+      d: stats ? formatDelta(stats.published_30d, stats.published_prev_30d) : '—',
       color: 'text-emerald-700',
     },
   ];
@@ -115,22 +175,19 @@ export default function PostsPage() {
           {/* Tabs + controls */}
           <div className="flex items-center justify-between border-b border-stone-200 px-4 pt-2.5 shrink-0">
             <div className="flex gap-1">
-              {tabs.map((t) => {
-                const count = t.id === 'all' ? DASH_POSTS.length : DASH_POSTS.filter((p) => p.status === t.id).length;
-                return (
-                  <button
-                    key={t.id}
-                    onClick={() => setTab(t.id)}
-                    className={`text-[13px] px-3 py-2 -mb-px border-b-2 transition ${tab === t.id
-                      ? 'border-puplar-700 text-stone-900 font-semibold'
-                      : 'border-transparent text-stone-500 hover:text-stone-800'
-                      }`}
-                  >
-                    {t.label}{' '}
-                    <span className="ml-1 text-[11px] text-stone-400 font-normal">{count}</span>
-                  </button>
-                );
-              })}
+              {tabs.map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => changeTab(t.id)}
+                  className={`text-[13px] px-3 py-2 -mb-px border-b-2 transition ${tab === t.id
+                    ? 'border-puplar-700 text-stone-900 font-semibold'
+                    : 'border-transparent text-stone-500 hover:text-stone-800'
+                  }`}
+                >
+                  {t.label}{' '}
+                  <span className="ml-1 text-[11px] text-stone-400 font-normal">{tabCount(t.id)}</span>
+                </button>
+              ))}
             </div>
             <div className="flex items-center gap-1.5 pb-2">
               <Button variant="secondary" size="sm">
@@ -156,7 +213,12 @@ export default function PostsPage() {
                 <span className="opacity-30">·</span>
                 <button className="text-white/85 hover:text-white transition">Schedule</button>
                 <span className="opacity-30">·</span>
-                <button className="text-rose-200 hover:text-rose-100 transition">Delete</button>
+                <button
+                  onClick={() => void deletePosts(undefined)}
+                  className="text-rose-200 hover:text-rose-100 transition"
+                >
+                  Delete
+                </button>
               </div>
               <button onClick={() => setSelected(new Set())} className="text-white/70 hover:text-white transition">
                 <Ic.X className="w-4 h-4" />
@@ -166,113 +228,148 @@ export default function PostsPage() {
 
           {/* Table */}
           <div className="flex-1 overflow-auto">
-            <table className="w-full text-[13px]">
-              <thead className="bg-stone-50/70 border-b border-stone-200 sticky top-0">
-                <tr className="text-left text-[11px] font-mono uppercase tracking-[0.08em] text-stone-500">
-                  <th className="px-4 py-2.5 w-8">
-                    <input
-                      type="checkbox"
-                      className="accent-puplar-700"
-                      checked={selected.size === visible.length && visible.length > 0}
-                      onChange={toggleAll}
-                    />
-                  </th>
-                  <th className="px-2 py-2.5">Title</th>
-                  <th className="px-2 py-2.5 w-[110px]">Status</th>
-                  <th className="px-2 py-2.5 w-[120px]">Category</th>
-                  <th className="px-2 py-2.5 w-[80px] text-right">Words</th>
-                  <th className="px-2 py-2.5 w-[80px] text-right">Views</th>
-                  <th className="px-2 py-2.5 w-[160px]">Last edited</th>
-                  <th className="px-2 py-2.5 w-[140px]">Schedule / pub</th>
-                  <th className="px-2 py-2.5 w-10"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {visible.map((p) => {
-                  const isSel = selected.has(p.id);
-                  const hue = (p.id.charCodeAt(1) * 50) % 360;
-                  return (
-                    <tr
-                      key={p.id}
-                      className={`border-b border-stone-100 hover:bg-stone-50/70 transition ${isSel ? 'bg-puplar-700/[0.04]' : ''}`}
-                    >
-                      <td className="px-4 py-3">
-                        <input
-                          type="checkbox"
-                          checked={isSel}
-                          onChange={() => toggle(p.id)}
-                          className="accent-puplar-700"
-                        />
-                      </td>
-                      <td className="px-2 py-3 max-w-[420px]">
-                        <div className="flex items-start gap-2.5">
-                          <Thumb hue={hue} w={36} h={36} className="rounded shrink-0" />
-                          <div className="min-w-0">
-                            <Link
-                              to={`/posts/${p.id}`}
-                              className="font-semibold text-stone-900 truncate text-[13.5px] hover:text-puplar-700 transition block"
-                            >
-                              {p.title}
-                            </Link>
-                            <div className="flex gap-1.5 mt-1 flex-wrap">
-                              {p.tags.slice(0, 3).map((t) => (
-                                <span key={t} className="text-[11px] text-stone-500 bg-stone-100 rounded px-1.5 py-0.5">
-                                  #{t}
-                                </span>
-                              ))}
+            {postsLoading ? (
+              <div className="py-16 text-center text-[13px] text-stone-400">Loading…</div>
+            ) : (
+              <table className="w-full text-[13px]">
+                <thead className="bg-stone-50/70 border-b border-stone-200 sticky top-0">
+                  <tr className="text-left text-[11px] font-mono uppercase tracking-[0.08em] text-stone-500">
+                    <th className="px-4 py-2.5 w-8">
+                      <input
+                        type="checkbox"
+                        className="accent-puplar-700"
+                        checked={selected.size === posts.length && posts.length > 0}
+                        onChange={toggleAll}
+                      />
+                    </th>
+                    <th className="px-2 py-2.5">Title</th>
+                    <th className="px-2 py-2.5 w-[110px]">Status</th>
+                    <th className="px-2 py-2.5 w-[120px]">Category</th>
+                    <th className="px-2 py-2.5 w-[80px] text-right">Words</th>
+                    <th className="px-2 py-2.5 w-[80px] text-right">Views</th>
+                    <th className="px-2 py-2.5 w-[160px]">Last edited</th>
+                    <th className="px-2 py-2.5 w-[140px]">Schedule / pub</th>
+                    <th className="px-2 py-2.5 w-10"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {posts.map((p) => {
+                    const isSel     = selected.has(p._id);
+                    const lastEdit  = p.edit_history[p.edit_history.length - 1];
+                    return (
+                      <tr
+                        key={p._id}
+                        className={`border-b border-stone-100 hover:bg-stone-50/70 transition ${isSel ? 'bg-puplar-700/[0.04]' : ''}`}
+                      >
+                        <td className="px-4 py-3">
+                          <input
+                            type="checkbox"
+                            checked={isSel}
+                            onChange={() => toggle(p._id)}
+                            className="accent-puplar-700"
+                          />
+                        </td>
+                        <td className="px-2 py-3 max-w-[420px]">
+                          <div className="flex items-start gap-2.5">
+                            {p.featured_image?.url ? (
+                              <img
+                                src={p.featured_image.url}
+                                alt={p.title}
+                                className="w-9 h-9 rounded object-cover shrink-0"
+                              />
+                            ) : (
+                              <Thumb hue={hueFromId(p._id)} w={36} h={36} className="rounded shrink-0" />
+                            )}
+                            <div className="min-w-0">
+                              <Link
+                                to={`/posts/${p._id}`}
+                                className="font-semibold text-stone-900 truncate text-[13.5px] hover:text-puplar-700 transition block"
+                              >
+                                {p.title}
+                              </Link>
+                              <div className="flex gap-1.5 mt-1 flex-wrap">
+                                {p.tags.slice(0, 3).map((t) => (
+                                  <span key={t} className="text-[11px] text-stone-500 bg-stone-100 rounded px-1.5 py-0.5">
+                                    #{t}
+                                  </span>
+                                ))}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      </td>
-                      <td className="px-2 py-3">
-                        <StatusPill status={p.status} size="sm" />
-                      </td>
-                      <td className="px-2 py-3 text-stone-700">{p.cat}</td>
-                      <td className="px-2 py-3 text-right font-mono text-stone-600">
-                        {p.words.toLocaleString()}
-                      </td>
-                      <td className="px-2 py-3 text-right font-mono text-stone-600">{p.views}</td>
-                      <td className="px-2 py-3">
-                        <div className="flex items-center gap-1.5">
-                          <Avatar name={p.editedBy} size={18} />
-                          <span className="text-stone-700 text-[12.5px]">{p.editedBy}</span>
-                          <span className="text-stone-400 text-[12px]">· {p.editedAt}</span>
-                        </div>
-                      </td>
-                      <td className="px-2 py-3 text-stone-600 text-[12.5px]">
-                        {p.scheduled ? (
-                          <span className="text-violet-700">{p.scheduled}</span>
-                        ) : (
-                          p.publishedAt
-                        )}
-                      </td>
-                      <td className="px-2 py-3 text-stone-400">
-                        <button className="hover:text-stone-700 p-1 transition">
-                          <Ic.More className="w-4 h-4" />
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                        </td>
+                        <td className="px-2 py-3">
+                          <StatusPill status={p.status} size="sm" />
+                        </td>
+                        <td className="px-2 py-3 text-stone-700">{p.category?.name ?? '—'}</td>
+                        <td className="px-2 py-3 text-right font-mono text-stone-600">
+                          {p.word_count.toLocaleString()}
+                        </td>
+                        <td className="px-2 py-3 text-right font-mono text-stone-600">{p.view_count}</td>
+                        <td className="px-2 py-3">
+                          {lastEdit ? (
+                            <div className="flex items-center gap-1.5">
+                              <Avatar name={lastEdit.name} size={18} />
+                              <span className="text-stone-700 text-[12.5px]">{lastEdit.name}</span>
+                              <span className="text-stone-400 text-[12px]">
+                                · {dayjs(lastEdit.at).format('MMM D')}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-stone-400 text-[12px]">—</span>
+                          )}
+                        </td>
+                        <td className="px-2 py-3 text-stone-600 text-[12.5px]">
+                          {p.scheduled_at ? (
+                            <span className="text-violet-700">
+                              {dayjs(p.scheduled_at).format('MMM D HH:mm')}
+                            </span>
+                          ) : p.published_at ? (
+                            dayjs(p.published_at).format('MMM D, YYYY')
+                          ) : (
+                            '—'
+                          )}
+                        </td>
+                        <td className="px-2 py-3 text-stone-400">
+                          <button className="hover:text-stone-700 p-1 transition">
+                            <Ic.More className="w-4 h-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
           </div>
 
           {/* Pagination footer */}
           <div className="border-t border-stone-200 px-4 py-2.5 flex items-center justify-between text-[12px] text-stone-500 shrink-0">
             <span>
-              Showing <span className="text-stone-900 font-semibold">{visible.length}</span> of {DASH_POSTS.length}
+              Showing <span className="text-stone-900 font-semibold">{posts.length}</span> of {total}
             </span>
             <div className="flex items-center gap-1">
-              <button className="px-2 py-1 border border-stone-200 rounded hover:bg-stone-50 transition">Prev</button>
-              <button className="px-2 py-1 border border-stone-200 rounded bg-stone-100 font-semibold text-stone-900">
-                1
+              <button
+                disabled={page === 1}
+                onClick={() => setPage((p) => p - 1)}
+                className="px-2 py-1 border border-stone-200 rounded hover:bg-stone-50 transition disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Prev
               </button>
-              <button className="px-2 py-1 border border-stone-200 rounded hover:bg-stone-50 transition">Next</button>
+              <button className="px-2 py-1 border border-stone-200 rounded bg-stone-100 font-semibold text-stone-900">
+                {page}
+              </button>
+              <button
+                disabled={page >= totalPages}
+                onClick={() => setPage((p) => p + 1)}
+                className="px-2 py-1 border border-stone-200 rounded hover:bg-stone-50 transition disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Next
+              </button>
             </div>
           </div>
         </div>
       </div>
+
       {showImport && <ImportModal onClose={() => setShowImport(false)} />}
     </div>
   );

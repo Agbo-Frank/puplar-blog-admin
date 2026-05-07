@@ -1,30 +1,49 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { Ic } from '../../components/icons';
 import type { ICategory } from '@/api/types';
 
 export interface RowMenuProps {
+  anchor: HTMLElement | null;
   category: ICategory;
   onEdit: () => void;
   onDelete: () => void;
   onClose: () => void;
 }
 
-export function RowMenu({ category, onEdit, onDelete, onClose }: RowMenuProps) {
+export function RowMenu({ anchor, category, onEdit, onDelete, onClose }: RowMenuProps) {
   const ref = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+
+  useEffect(() => {
+    if (!anchor) return;
+    const rect = anchor.getBoundingClientRect();
+    setPos({
+      top:  rect.bottom + 4,
+      left: rect.right - 176, // w-44 = 11rem = 176px
+    });
+  }, [anchor]);
 
   useEffect(() => {
     function handle(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+      if (
+        ref.current &&
+        !ref.current.contains(e.target as Node) &&
+        e.target !== anchor
+      ) {
+        onClose();
+      }
     }
     document.addEventListener('mousedown', handle);
     return () => document.removeEventListener('mousedown', handle);
-  }, [onClose]);
+  }, [onClose, anchor]);
 
-  return (
+  return createPortal(
     <div
       ref={ref}
-      className="absolute right-0 top-full mt-1 z-30 bg-white border border-stone-200 rounded-lg shadow-lg py-1 w-44"
+      style={{ top: pos.top, left: pos.left }}
+      className="fixed z-50 bg-white border border-stone-200 rounded-lg shadow-lg py-1 w-44"
     >
       <button
         onClick={() => { onEdit(); onClose(); }}
@@ -50,6 +69,7 @@ export function RowMenu({ category, onEdit, onDelete, onClose }: RowMenuProps) {
         <Ic.X className="w-3.5 h-3.5" />
         Delete
       </button>
-    </div>
+    </div>,
+    document.body
   );
 }

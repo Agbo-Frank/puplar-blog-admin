@@ -8,25 +8,28 @@ import {
 } from "react";
 import { useNavigate } from "react-router";
 import { STORAGE_KEYS } from "@/utils/constant";
-import type { IAuth, IAdminProfile } from "@/api/types";
+import type { IAuth, IAdminProfile, ICategory } from "@/api/types";
 import { isEmpty, parseJson } from "@/utils";
 import dayjs from "dayjs";
 
 interface IState {
-  auth: IAuth         | null;
-  user: IAdminProfile | null;
+  auth:       IAuth         | null;
+  user:       IAdminProfile | null;
+  categories: ICategory[];
 }
 
 const initialState: IState = {
-  auth: null,
-  user: null,
+  auth:       null,
+  user:       null,
+  categories: [],
 };
 
 export interface StoreContext extends IState {
-  hydrated: boolean;
-  setAuth:   (auth: IAuth) => void;
-  unsetAuth: () => void;
-  setUser:   (user: IAdminProfile | null) => void;
+  hydrated:      boolean;
+  setAuth:       (auth: IAuth) => void;
+  unsetAuth:     () => void;
+  setUser:       (user: IAdminProfile | null) => void;
+  setCategories: (cats: ICategory[]) => void;
 }
 
 const store = createContext<StoreContext | null>(null);
@@ -59,6 +62,10 @@ export function StoreProvider({ children }: PropsWithChildren) {
     setState((p) => ({ ...p, user }));
   }, []);
 
+  const setCategories = useCallback((cats: ICategory[]) => {
+    setState((p) => ({ ...p, categories: cats }));
+  }, []);
+
   // Auto-logout when refresh token has expired
   useEffect(() => {
     if (!hydrated || !state.auth?.refresh_token_expires_at) return;
@@ -83,7 +90,7 @@ export function StoreProvider({ children }: PropsWithChildren) {
   }, []);
 
   return (
-    <store.Provider value={{ ...state, hydrated, setAuth, unsetAuth, setUser }}>
+    <store.Provider value={{ ...state, hydrated, setAuth, unsetAuth, setUser, setCategories }}>
       {children}
     </store.Provider>
   );
