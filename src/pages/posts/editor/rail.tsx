@@ -2,10 +2,9 @@ import { useState, useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { Ic } from '../../../components/icons';
 import { Avatar, StatusPill } from '../../../components/material';
-import { DASH_CATEGORIES, STATUS_META } from '../../../data/admin';
-import type { PostStatus, HistoryEntry } from '../../../types/admin';
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+import { useCategories } from '@/hooks/use-api';
+import type { PostStatus, IEditHistoryEntry } from '@/api/types';
+import dayjs from 'dayjs';
 
 interface SectionProps { title: string; children: ReactNode; }
 function Section({ title, children }: SectionProps) {
@@ -27,34 +26,30 @@ function Field({ label, children, col }: FieldProps) {
   );
 }
 
-// ─── Props ────────────────────────────────────────────────────────────────────
-
 interface DashEditorRailProps {
   status: PostStatus;
-  category: string;
+  category: string;   // category _id
   tags: string[];
   slug: string;
-  meta: string;
   scheduledAt: string;
-  history: HistoryEntry[];
+  history: IEditHistoryEntry[];
   onStatusChange: (s: PostStatus) => void;
-  onCategoryChange: (c: string) => void;
+  onCategoryChange: (id: string) => void;
   onTagsChange: (t: string[]) => void;
   onSlugChange: (s: string) => void;
-  onMetaChange: (m: string) => void;
   onScheduledAtChange: (d: string) => void;
 }
 
-// ─── Component ────────────────────────────────────────────────────────────────
-
 export function DashEditorRail({
-  status, category, tags, slug, meta, scheduledAt, history,
-  onStatusChange, onCategoryChange, onTagsChange, onSlugChange, onMetaChange, onScheduledAtChange,
+  status, category, tags, slug, scheduledAt, history,
+  onStatusChange, onCategoryChange, onTagsChange, onSlugChange, onScheduledAtChange,
 }: DashEditorRailProps) {
   const [showStatusDrop, setShowStatusDrop] = useState(false);
   const [showTagInput, setShowTagInput] = useState(false);
   const [tagInput, setTagInput] = useState('');
   const statusRef = useRef<HTMLDivElement>(null);
+
+  const { categories } = useCategories();
 
   // Close status dropdown on outside click
   useEffect(() => {
@@ -74,9 +69,6 @@ export function DashEditorRail({
     setTagInput('');
     setShowTagInput(false);
   }
-
-  // Suppress unused import warning — STATUS_META is used in the dropdown
-  void STATUS_META;
 
   return (
     <aside className="w-[300px] border-l border-stone-200 bg-stone-50/60 overflow-y-auto shrink-0">
@@ -148,8 +140,9 @@ export function DashEditorRail({
               onChange={(e) => onCategoryChange(e.target.value)}
               className="text-[12.5px] border border-stone-200 rounded px-2 py-1 bg-white focus:outline-none focus:border-puplar-700 transition"
             >
-              {DASH_CATEGORIES.map((c) => (
-                <option key={c.id} value={c.name}>{c.name}</option>
+              <option value="">Select…</option>
+              {categories?.map((c) => (
+                <option key={c._id} value={c._id}>{c.name}</option>
               ))}
             </select>
           </Field>
@@ -191,48 +184,34 @@ export function DashEditorRail({
           </Field>
         </Section>
 
-        {/* ── SEO ── */}
-        <Section title="SEO">
-          <Field label="Slug" col>
-            <input
-              value={slug}
-              onChange={(e) => {
-                const raw = e.target.value;
-                const formatted = raw
-                  .toLowerCase()
-                  .replace(/\s+/g, '-')
-                  .replace(/[^a-z0-9-]/g, '')
-                  .replace(/-{2,}/g, '-');
-                onSlugChange(formatted);
-              }}
-              className="text-[12px] font-mono border border-stone-200 rounded px-2 py-1 bg-white w-full focus:outline-none focus:border-puplar-700 transition"
-            />
-          </Field>
-          <Field label="Meta description" col>
-            <textarea
-              value={meta}
-              onChange={(e) => onMetaChange(e.target.value)}
-              maxLength={160}
-              rows={3}
-              className="text-[12px] border border-stone-200 rounded px-2 py-1 bg-white w-full resize-none focus:outline-none focus:border-puplar-700 transition"
-            />
-            <div className={`text-[10px] mt-0.5 font-mono ${meta.length > 140 ? 'text-amber-600' : 'text-stone-400'}`}>
-              {meta.length} / 160
-            </div>
-          </Field>
-        </Section>
+        <Field label="Slug" col>
+          <input
+            value={slug}
+            onChange={(e) => {
+              const formatted = e.target.value
+                .toLowerCase()
+                .replace(/\s+/g, '-')
+                .replace(/[^a-z0-9-]/g, '')
+                .replace(/-{2,}/g, '-');
+              onSlugChange(formatted);
+            }}
+            className="text-[12px] font-mono border border-stone-200 rounded px-2 py-1 bg-white w-full focus:outline-none focus:border-puplar-700 transition"
+          />
+        </Field>
 
         {/* ── History ── */}
-        <Section title="History">
-          {history.slice(0, 3).map((h, i) => (
-            <div key={i} className="flex items-center gap-2 text-[12px]">
-              <Avatar name={h.who} size={18} />
-              <span className="text-stone-700 font-medium">{h.who}</span>
-              <span className="text-stone-500 truncate">{h.action}</span>
-              <span className="text-stone-400 ml-auto shrink-0">{h.t}</span>
-            </div>
-          ))}
-        </Section>
+        {history?.length > 0 && (
+          <Section title="History">
+            {history.slice(0, 3).map((h, i) => (
+              <div key={i} className="flex items-center gap-2 text-[12px]">
+                <Avatar name={h.name} size={18} />
+                <span className="text-stone-700 font-medium">{h.name}</span>
+                <span className="text-stone-500 truncate">{h.action}</span>
+                <span className="text-stone-400 ml-auto shrink-0">{dayjs(h.at).format('MMM D')}</span>
+              </div>
+            ))}
+          </Section>
+        )}
 
       </div>
     </aside>

@@ -1,17 +1,11 @@
 import { useState, useRef } from 'react';
 import { DashTopBar } from '../../components/layout/top-bar';
 import { Ic } from '../../components/icons';
-import { Thumb } from '../../components/material';
-import { DASH_MEDIA } from '../../data/admin';
-import type { AdminMedia } from '../../types/admin';
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-// src is populated for real uploaded files (data URL / future: CDN URL).
-// DASH_MEDIA items have no src — they render as Thumb placeholders.
-interface MediaItem extends AdminMedia {
-  src?: string;
-}
+import { Thumb, Button } from '../../components/material';
+import { useApi, useMutation } from '@/hooks/use-api';
+import { endpoints } from '@/api/endpoints';
+import { post } from '@/api/fetcher';
+import type { IMedia, IPagination } from '@/api/types';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -21,57 +15,58 @@ function formatBytes(n: number): string {
   return `${(n / 1048576).toFixed(1)} MB`;
 }
 
-function extType(name: string): AdminMedia['type'] {
-  const ext = name.split('.').pop()?.toLowerCase();
-  if (ext === 'jpg' || ext === 'jpeg') return 'JPG';
-  if (ext === 'svg') return 'SVG';
-  if (ext === 'mp4') return 'MP4';
-  return 'PNG';
+function mimeToLabel(type: string): string {
+  if (type === 'image/jpeg') return 'JPG';
+  if (type === 'image/png') return 'PNG';
+  if (type === 'image/svg+xml') return 'SVG';
+  if (type === 'video/mp4') return 'MP4';
+  if (type === 'image/gif') return 'GIF';
+  if (type === 'image/webp') return 'WEBP';
+  return type.split('/').pop()?.toUpperCase() ?? 'FILE';
+}
+
+function hueFromId(id: string): number {
+  return parseInt(id.slice(-6), 16) % 360;
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function MediaPage() {
-  const [media,      setMedia]      = useState<MediaItem[]>(DASH_MEDIA);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const { data: mediaRes, isLoading, mutate } = useApi<IPagination<IMedia>>(endpoints.media);
+  const media = mediaRes?.data?.docs ?? [];
+
+  const { trigger: deleteMedia } = useMutation(
+    endpoints.mediaDetails,
+    { method: 'DELETE', invalidate: [endpoints.media] }
+  );
+
   // ── Upload ──────────────────────────────────────────────────────────────────
-  function processFiles(files: FileList | null) {
+  async function processFiles(files: FileList | null) {
     if (!files) return;
-    Array.from(files).forEach((file) => {
-      if (!file.type.startsWith('image/') && file.type !== 'video/mp4') return;
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        // NOTE: in production, upload file to storage (e.g. S3/R2) here
-        // and use the returned CDN URL as `src` instead of this data URL.
-        const src = e.target?.result as string;
-        const img = new Image();
-        img.onload = () => {
-          setMedia((prev) => [{
-            id:   `upload-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-            name: file.name,
-            type: extType(file.name),
-            w:    img.naturalWidth,
-            h:    img.naturalHeight,
-            size: formatBytes(file.size),
-            hue:  Math.floor(Math.random() * 360),
-            used: 0,
-            src,
-          }, ...prev]);
-        };
-        img.src = src;
-      };
-      reader.readAsDataURL(file);
-    });
+    setUploading(true);
+    try {
+      for (const file of Array.from(files)) {
+        if (!file.type.startsWith('image/') && file.type !== 'video/mp4') continue;
+        const formData = new FormData();
+        formData.append('file', file);
+        await post<IMedia, FormData>(endpoints.media, formData);
+      }
+      await mutate();
+    } finally {
+      setUploading(false);
+    }
   }
 
-  function confirmDelete(id: string) {
-    setMedia((prev) => prev.filter((m) => m.id !== id));
+  async function confirmDelete(id: string) {
+    await deleteMedia(undefined, { id });
     setDeletingId(null);
   }
 
-  const isEmpty = media.length === 0;
+  const isEmpty = !isLoading && media.length === 0;
 
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
@@ -85,28 +80,30 @@ export default function MediaPage() {
               Hero images, diagrams, and assets used across posts.
             </p>
           </div>
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="text-[13px] font-semibold text-white bg-puplar-700 hover:bg-puplar-900 rounded-md px-3.5 py-1.5 inline-flex items-center gap-1.5 transition"
-          >
+          <Button onClick={() => fileInputRef.current?.click()} loading={uploading}>
             <Ic.Upload className="w-3.5 h-3.5" /> Upload
-          </button>
+          </Button>
           <input
             ref={fileInputRef}
             type="file"
             accept="image/*,video/mp4"
             multiple
             className="hidden"
-            onChange={(e) => processFiles(e.target.files)}
+            onChange={(e) => { void processFiles(e.target.files); e.target.value = ''; }}
           />
         </div>
 
         <div className="px-8 pb-8">
+          {/* Loading state */}
+          {isLoading && (
+            <div className="text-center py-16 text-[13px] text-stone-400">Loading…</div>
+          )}
+
           {/* Empty state — also acts as the upload drop zone */}
           {isEmpty && (
             <div
               onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => { e.preventDefault(); processFiles(e.dataTransfer.files); }}
+              onDrop={(e) => { e.preventDefault(); void processFiles(e.dataTransfer.files); }}
               onClick={() => fileInputRef.current?.click()}
               className="border-2 border-dashed border-stone-300 rounded-xl bg-white grid place-items-center min-h-[260px] text-center px-6 hover:border-puplar-700 hover:bg-stone-50/60 transition cursor-pointer"
             >
@@ -121,46 +118,46 @@ export default function MediaPage() {
           )}
 
           {/* Media grid */}
-          {!isEmpty && (
+          {!isLoading && media.length > 0 && (
             <div className="grid grid-cols-4 gap-4">
               {media.map((m) => {
-                const isDeleting = deletingId === m.id;
+                const isDeleting = deletingId === m._id;
                 return (
                   <div
-                    key={m.id}
+                    key={m._id}
                     className={`bg-white border rounded-lg overflow-hidden group transition ${
                       isDeleting ? 'border-red-300 shadow-sm' : 'border-stone-200 hover:border-stone-300 hover:shadow-sm'
                     }`}
                   >
                     <div className="relative">
                       {/* Thumbnail */}
-                      {m.src ? (
+                      {m.url ? (
                         <img
-                          src={m.src}
+                          src={m.url}
                           alt={m.name}
                           className="w-full object-cover"
                           style={{ height: 140 }}
                         />
                       ) : (
-                        <Thumb hue={m.hue} w="100%" h={140} />
+                        <Thumb hue={hueFromId(m._id)} w="100%" h={140} />
                       )}
 
                       {/* Type badge */}
                       <div className="absolute top-2 right-2 text-[10px] font-mono uppercase bg-white/85 backdrop-blur px-1.5 py-0.5 rounded">
-                        {m.type}
+                        {mimeToLabel(m.type)}
                       </div>
 
                       {/* Used badge */}
-                      {m.used > 0 && (
+                      {m.usage_count > 0 && (
                         <div className="absolute bottom-2 left-2 text-[10px] font-mono bg-stone-900/80 text-white px-1.5 py-0.5 rounded">
-                          used in {m.used}
+                          used in {m.usage_count}
                         </div>
                       )}
 
                       {/* Delete button — visible on hover */}
                       {!isDeleting && (
                         <button
-                          onClick={() => setDeletingId(m.id)}
+                          onClick={() => setDeletingId(m._id)}
                           className="absolute top-2 left-2 w-6 h-6 rounded-full bg-white/85 backdrop-blur grid place-items-center text-stone-400 hover:text-red-500 hover:bg-white transition opacity-0 group-hover:opacity-100"
                           title="Delete"
                         >
@@ -172,7 +169,7 @@ export default function MediaPage() {
                     {/* Meta */}
                     <div className="p-2.5">
                       <div className="text-[12.5px] font-medium text-stone-900 truncate">{m.name}</div>
-                      <div className="text-[11px] text-stone-500 font-mono">{m.w}×{m.h} · {m.size}</div>
+                      <div className="text-[11px] text-stone-500 font-mono">{formatBytes(m.size)}</div>
                     </div>
 
                     {/* Inline delete confirmation */}
@@ -187,7 +184,7 @@ export default function MediaPage() {
                             Cancel
                           </button>
                           <button
-                            onClick={() => confirmDelete(m.id)}
+                            onClick={() => void confirmDelete(m._id)}
                             className="text-[11px] font-semibold text-white bg-red-500 rounded px-2 py-0.5 hover:bg-red-600 transition"
                           >
                             Delete

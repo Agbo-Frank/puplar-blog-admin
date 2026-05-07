@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { Logo } from '../../components/material';
-
-interface LoginPageProps {
-  onLogin: () => void;
-}
+import { useNavigate } from 'react-router';
+import { useMutation } from '@/hooks/use-api';
+import { useStore } from '@/hooks/use-store';
+import { get } from '@/api/fetcher';
+import { endpoints } from '@/api/endpoints';
+import type { IAuth, IAdminProfile, LoginPayload } from '@/api/types';
 
 function EyeIcon({ open }: { open: boolean }) {
   return open ? (
@@ -18,26 +19,40 @@ function EyeIcon({ open }: { open: boolean }) {
   );
 }
 
-export default function LoginPage({ onLogin }: LoginPageProps) {
+export default function LoginPage() {
+  const { setAuth, setUser } = useStore();
+  const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
 
-  function handleSubmit(e: React.FormEvent) {
+  const { trigger: login, isLoading: loading } = useMutation<IAuth, LoginPayload>(endpoints.login, {
+    skipErrorHandling: true,
+    onError: (err) => setError(err.message),
+  });
+
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
-    if (!email || !password) { setError('Please enter your email and password.'); return; }
-    setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-      if (email === 'admin@puplar.com' && password === 'password') {
-        onLogin();
-      } else {
-        setError('Invalid email or password.');
-      }
-    }, 700);
+    if (!email || !password) {
+      setError('Please enter your email and password.');
+      return;
+    }
+
+    const res = await login({ email, password });
+    if (!res?.data) return;
+
+    setAuth(res.data);
+
+    try {
+      const profile = await get<IAdminProfile>(endpoints.me);
+      if (profile.data) setUser(profile.data);
+    } catch {
+      // non-fatal: auth succeeded, profile loads on next visit
+    }
+
+    navigate('/posts', { replace: true });
   }
 
   return (
@@ -52,8 +67,13 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
         <div className="absolute -bottom-8  -right-8  w-[240px] h-[240px] rounded-full border border-white/[0.07]" />
 
         {/* Logo */}
-        <div className="relative">
-          <Logo color="light" className="h-8" />
+        <div className="flex items-center gap-2 relative">
+          <div className="w-7 h-7 rounded-lg bg-puplar-700 text-white grid place-items-center font-display font-bold text-[16px]">
+            P
+          </div>
+          <span className="font-display font-bold text-[20px] tracking-[-0.02em] text-white">
+            puplar
+          </span>
         </div>
 
         {/* Headline */}
@@ -73,8 +93,9 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
         <div className="w-full max-w-[380px]">
 
           {/* Mobile logo */}
-          <div className="flex justify-center mb-8 lg:hidden">
-            <Logo color="dark" className="h-8" />
+          <div className="flex items-center gap-2 justify-center mb-8 lg:hidden">
+            <div className="w-7 h-7 rounded-lg bg-puplar-700 text-white grid place-items-center font-display font-bold text-[16px]">P</div>
+            <span className="font-display font-bold text-[20px] tracking-[-0.02em] text-stone-900">puplar</span>
           </div>
 
           {/* Heading */}
@@ -116,6 +137,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
                   <label htmlFor="password" className="text-[12.5px] font-medium text-stone-700">
                     Password
                   </label>
+
                 </div>
                 <div className="relative">
                   <input
