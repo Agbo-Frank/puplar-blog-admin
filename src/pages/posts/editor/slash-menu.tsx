@@ -7,7 +7,7 @@ import {
   size as floatingSize,
   type VirtualElement,
 } from '@floating-ui/react';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Ic } from '../../../components/icons';
 import type { Editor } from '@tiptap/react';
 
@@ -17,7 +17,6 @@ interface SlashItem {
   desc: string;
   command: () => void;
 }
-
 
 interface SlashMenuProps {
   editor: Editor | null;
@@ -51,18 +50,22 @@ export default function SlashMenu({
     ],
   });
 
-  const allItems: SlashItem[] = editor ? [
-    { icon: Ic.H1, label: 'Heading 1', desc: 'Big section title', command: () => editor.chain().focus().toggleHeading({ level: 1 }).run() },
-    { icon: Ic.H2, label: 'Heading 2', desc: 'Medium heading', command: () => editor.chain().focus().toggleHeading({ level: 2 }).run() },
-    { icon: Ic.List, label: 'Bulleted list', desc: 'Simple unordered list', command: () => editor.chain().focus().toggleBulletList().run() },
-    { icon: Ic.Quote, label: 'Quote', desc: 'Pull quote / blockquote', command: () => editor.chain().focus().toggleBlockquote().run() },
-    { icon: Ic.Code, label: 'Code block', desc: 'Syntax-highlighted code', command: () => editor.chain().focus().toggleCodeBlock().run() },
-    { icon: Ic.Image, label: 'Image', desc: 'Insert from media library', command: () => setShowMediaPick(true) },
-  ] : [];
+  const filtered = useMemo(() => {
+    if (!editor) return [];
 
-  const filtered = allItems.filter(
-    (item) => !slashQuery || item.label.toLowerCase().includes(slashQuery.toLowerCase()),
-  );
+    const allItems: SlashItem[] = [
+      { icon: Ic.H1, label: 'Heading 1', desc: 'Big section title', command: () => editor.chain().focus().toggleHeading({ level: 1 }).run() },
+      { icon: Ic.H2, label: 'Heading 2', desc: 'Medium heading', command: () => editor.chain().focus().toggleHeading({ level: 2 }).run() },
+      { icon: Ic.List, label: 'Bulleted list', desc: 'Simple unordered list', command: () => editor.chain().focus().toggleBulletList().run() },
+      { icon: Ic.Quote, label: 'Quote', desc: 'Pull quote / blockquote', command: () => editor.chain().focus().toggleBlockquote().run() },
+      { icon: Ic.Code, label: 'Code block', desc: 'Syntax-highlighted code', command: () => editor.chain().focus().toggleCodeBlock().run() },
+      { icon: Ic.Image, label: 'Image', desc: 'Insert from media library', command: () => setShowMediaPick(true) },
+    ];
+
+    return allItems.filter(
+      (item) => !slashQuery || item.label.toLowerCase().includes(slashQuery.toLowerCase()),
+    );
+  }, [slashQuery, editor]);
 
   function applySlashItem(item: SlashItem) {
     if (!editor) return;
@@ -135,7 +138,7 @@ export default function SlashMenu({
     <div
       ref={refs.setFloating}
       style={floatingStyles}
-      className="z-50 bg-white border border-stone-200 rounded-lg shadow-xl w-[280px] py-1.5 overflow-y-auto"
+      className="z-50 bg-white border border-stone-200 rounded-lg shadow-xl w-[280px] h-auto py-1.5"
     >
       <div className="px-3 py-1.5 text-[10px] font-mono uppercase tracking-[0.1em] text-stone-500">
         Basic blocks
