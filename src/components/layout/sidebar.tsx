@@ -13,9 +13,16 @@ interface NavItem {
   badge?: string;
 }
 
+interface SidebarItemProps {
+  item: NavItem;
+  collapsed: boolean;
+  isActive: boolean;
+  onClick?: () => void;
+}
+
 const NAV_ITEMS: NavItem[] = [
   { id: 'overview', label: 'Overview', icon: Ic.Chart, route: '/overview' },
-  { id: 'posts', label: 'Posts', icon: Ic.Doc, route: '/posts', badge: '9' },
+  { id: 'posts', label: 'Posts', icon: Ic.Doc, route: '/posts' },
   { id: 'media', label: 'Media', icon: Ic.Image, route: '/media' },
   { id: 'taxonomy', label: 'Categories', icon: Ic.Folder, route: '/taxonomy' },
   { id: 'schedule', label: 'Schedule', icon: Ic.Calendar, route: '/schedule' },
@@ -24,6 +31,34 @@ const NAV_ITEMS: NavItem[] = [
 interface DashSidebarProps {
   collapsed?: boolean;
   onCollapse?: () => void;
+}
+
+function SidebarItem({ item, collapsed, isActive, onClick }: SidebarItemProps) {
+  const Icon = item.icon;
+  const Component = onClick ? 'button' : Link;
+  return (
+    <Component
+      to={item.route}
+      onClick={onClick}
+      title={collapsed ? item.label : undefined}
+      className={`flex items-center gap-2.5 ${collapsed ? 'justify-center px-2' : 'px-2.5'} py-2 rounded-md text-[13px] font-medium transition ${isActive
+        ? 'bg-stone-100 text-stone-900'
+        : 'text-stone-600 hover:bg-stone-50 hover:text-stone-900'
+        }`}
+    >
+      <Icon className="w-4 h-4 shrink-0" />
+      {!collapsed && (
+        <>
+          <span className="flex-1">{item.label}</span>
+          {item.badge && (
+            <span className="text-[10px] font-mono bg-stone-200 text-stone-700 px-1.5 py-0.5 rounded">
+              {item.badge}
+            </span>
+          )}
+        </>
+      )}
+    </Component>
+  )
 }
 
 export function DashSidebar({ collapsed = false, onCollapse }: DashSidebarProps) {
@@ -67,31 +102,15 @@ export function DashSidebar({ collapsed = false, onCollapse }: DashSidebarProps)
 
       {/* Nav items */}
       <nav className="flex-1 px-2 flex flex-col gap-0.5">
-        {NAV_ITEMS.map((item) => {
-          const Icon = item.icon;
+        {NAV_ITEMS.map((item, i) => {
           const isActive = pathname === item.route || (item.route !== '/' && pathname.startsWith(item.route));
           return (
-            <Link
-              key={item.id}
-              to={item.route}
-              title={collapsed ? item.label : undefined}
-              className={`flex items-center gap-2.5 ${collapsed ? 'justify-center px-2' : 'px-2.5'} py-2 rounded-md text-[13px] font-medium transition ${isActive
-                  ? 'bg-stone-100 text-stone-900'
-                  : 'text-stone-600 hover:bg-stone-50 hover:text-stone-900'
-                }`}
-            >
-              <Icon className="w-4 h-4 shrink-0" />
-              {!collapsed && (
-                <>
-                  <span className="flex-1">{item.label}</span>
-                  {item.badge && (
-                    <span className="text-[10px] font-mono bg-stone-200 text-stone-700 px-1.5 py-0.5 rounded">
-                      {item.badge}
-                    </span>
-                  )}
-                </>
-              )}
-            </Link>
+            <SidebarItem
+              key={i}
+              item={item}
+              collapsed={collapsed}
+              isActive={isActive}
+            />
           );
         })}
       </nav>
@@ -116,17 +135,16 @@ export function DashSidebar({ collapsed = false, onCollapse }: DashSidebarProps)
 
       {/* Settings + Logout */}
       <div className={`border-t border-stone-200 ${collapsed ? 'p-2 flex flex-col gap-1' : 'p-3 flex flex-col gap-1'}`}>
-        <Link
-          to="/settings"
-          className={`flex items-center gap-2 ${collapsed ? 'justify-center' : ''} text-[13px] text-stone-600 hover:text-stone-900 transition`}
-        >
-          <Ic.Settings className="w-4 h-4" />
-          {!collapsed && <span>Settings</span>}
-        </Link>
+        <SidebarItem
+          item={{ id: 'settings', label: 'Settings', icon: Ic.Settings, route: '/settings' }}
+          collapsed={collapsed}
+          isActive={pathname === '/settings'}
+        />
+
         <button
           onClick={handleLogout}
           disabled={loggingOut}
-          className={`flex items-center gap-2 ${collapsed ? 'justify-center' : ''} text-[13px] text-stone-600 hover:text-red-600 transition disabled:opacity-50 cursor-pointer`}
+          className={`flex items-center gap-2 ${collapsed ? 'justify-center px-2' : 'px-2.5'} py-2 text-[13px] rounded-md text-red-600 hover:bg-red-50 transition disabled:opacity-50 cursor-pointer`}
         >
           <Ic.Logout className="w-4 h-4" />
           {!collapsed && <span>Sign out</span>}

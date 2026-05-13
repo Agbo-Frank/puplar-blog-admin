@@ -25,6 +25,9 @@ export const endpoints = {
   tags:       "/tags",
   tagDetails: "/tags/:slug",
 
+  // Authors
+  authorMe: "/authors/me",
+
   // Media
   media:        "/media",
   mediaDetails: "/media/:id",

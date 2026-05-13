@@ -81,6 +81,7 @@ export interface IAuthor {
   access_level: AccessLevel;
   additional_permissions: string[];
   restricted_permissions: string[];
+  permissions: string[];
   post_count: number;
   created_at: string;
   updated_at: string;
@@ -112,7 +113,7 @@ export interface IPost {
   category: string;
   tags: string[];
   author: string;
-  featured_image: string | null;
+  featured_image: Pick<IMedia, '_id' | 'url' | 'name' | 'type'> | null;
   seo: IPostSeo;
   word_count: number;
   read_time: number;
@@ -201,6 +202,10 @@ export interface IPostListItem extends Omit<IPost, 'category' | 'author' | 'feat
   category:       Pick<ICategory, '_id' | 'name' | 'color' | 'slug'> | null;
   author:         Pick<IAuthor,   '_id' | 'name'> | null;
   featured_image: Pick<IMedia,    '_id' | 'url' | 'name' | 'type'> | null;
+}
+
+export interface UpdateAuthorPayload {
+  name: string;
 }
 
 // ── Media ─────────────────────────────────────────────────────────────────────

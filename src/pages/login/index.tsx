@@ -5,6 +5,7 @@ import { useStore } from '@/hooks/use-store';
 import { get } from '@/api/fetcher';
 import { endpoints } from '@/api/endpoints';
 import type { IAuth, IAdminProfile, LoginPayload } from '@/api/types';
+import { Logo } from '@/components/material';
 
 function EyeIcon({ open }: { open: boolean }) {
   return open ? (
@@ -49,7 +50,7 @@ export default function LoginPage() {
       const profile = await get<IAdminProfile>(endpoints.me);
       if (profile.data) setUser(profile.data);
     } catch {
-      // non-fatal: auth succeeded, profile loads on next visit
+      // non-fatal
     }
 
     navigate('/posts', { replace: true });
@@ -67,14 +68,7 @@ export default function LoginPage() {
         <div className="absolute -bottom-8  -right-8  w-[240px] h-[240px] rounded-full border border-white/[0.07]" />
 
         {/* Logo */}
-        <div className="flex items-center gap-2 relative">
-          <div className="w-7 h-7 rounded-lg bg-puplar-700 text-white grid place-items-center font-display font-bold text-[16px]">
-            P
-          </div>
-          <span className="font-display font-bold text-[20px] tracking-[-0.02em] text-white">
-            puplar
-          </span>
-        </div>
+        <Logo color="light" className="h-auto max-w-[100px]" />
 
         {/* Headline */}
         <div className="mt-auto relative">
@@ -91,15 +85,10 @@ export default function LoginPage() {
       {/* ── Right panel ── */}
       <div className="flex-1 bg-stone-50 flex flex-col items-center justify-center px-6 py-12 overflow-y-auto">
         <div className="w-full max-w-[380px]">
-
-          {/* Mobile logo */}
-          <div className="flex items-center gap-2 justify-center mb-8 lg:hidden">
-            <div className="w-7 h-7 rounded-lg bg-puplar-700 text-white grid place-items-center font-display font-bold text-[16px]">P</div>
-            <span className="font-display font-bold text-[20px] tracking-[-0.02em] text-stone-900">puplar</span>
-          </div>
+          <Logo className="mb-7 h-auto max-w-[100px] mx-auto lg:hidden" />
 
           {/* Heading */}
-          <div className="mb-7">
+          <div className="mb-7 text-center">
             <h1 className="font-display font-bold text-[28px] tracking-[-0.025em] text-stone-900 m-0">
               Welcome back
             </h1>

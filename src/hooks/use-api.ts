@@ -2,7 +2,7 @@ import useSWR, { type SWRConfiguration } from "swr";
 import { del, fetcher, get, patch, post, put } from "@/api/fetcher";
 import useSWRMutation from "swr/mutation";
 import { useSWRConfig } from "swr";
-import type { ApiError, ApiResponse, ICategory } from "@/api/types";
+import type { ApiError, ApiResponse, IAuthor, ICategory } from "@/api/types";
 import { endpoints } from "@/api/endpoints";
 import { cleanPayload, replacePathParams } from "@/utils";
 import { toast } from "sonner";
@@ -161,7 +161,25 @@ export function useMutation<TResponse = unknown, TRequest = unknown>(
   };
 }
 
-// ─── useCategories ────────────────────────────────────────────────────────────
+export function useAuthor() {
+  const { author, setAuthor } = useStore();
+  const hasCache = author !== null;
+
+  const { isLoading } = useApi<IAuthor>(
+    hasCache ? null : endpoints.authorMe,
+    {
+      onSuccess: (res: ApiResponse<unknown>) => {
+        const data = (res as ApiResponse<IAuthor>).data;
+        if (data) setAuthor(data);
+      },
+    }
+  );
+
+  return {
+    author,
+    isLoading: !hasCache && isLoading,
+  };
+}
 
 export function useCategories() {
   const { categories, setCategories } = useStore();
@@ -178,7 +196,7 @@ export function useCategories() {
   );
 
   function revalidate() {
-    setCategories([]); // clears cache → next render triggers a fresh fetch
+    setCategories([]);
   }
 
   return {

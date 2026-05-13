@@ -81,8 +81,8 @@ export function EditorCanvas({
       {showMediaPick && editor && (
         <MediaPickerModal
           onClose={() => { setShowMediaPick(false); editor.commands.focus(); }}
-          onSelect={(src, alt) => {
-            editor.chain().focus().setImage({ src, alt }).run();
+          onSelect={(media) => {
+            editor.chain().focus().setImage({ src: media.url, alt: media.name.replace(/\.[^.]+$/, '') }).run();
           }}
         />
       )}

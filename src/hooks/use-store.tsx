@@ -8,28 +8,34 @@ import {
 } from "react";
 import { useNavigate } from "react-router";
 import { STORAGE_KEYS } from "@/utils/constant";
-import type { IAuth, IAdminProfile, ICategory } from "@/api/types";
+import type { IAuth, IAdminProfile, IAuthor, ICategory } from "@/api/types";
 import { isEmpty, parseJson } from "@/utils";
 import dayjs from "dayjs";
 
 interface IState {
-  auth:       IAuth         | null;
-  user:       IAdminProfile | null;
-  categories: ICategory[];
+  auth:        IAuth         | null;
+  user:        IAdminProfile | null;
+  author:      IAuthor       | null;
+  categories:  ICategory[];
+  authorName:  string;
 }
 
 const initialState: IState = {
-  auth:       null,
-  user:       null,
-  categories: [],
+  auth:        null,
+  user:        null,
+  author:      null,
+  categories:  [],
+  authorName:  '',
 };
 
 export interface StoreContext extends IState {
-  hydrated:      boolean;
-  setAuth:       (auth: IAuth) => void;
-  unsetAuth:     () => void;
-  setUser:       (user: IAdminProfile | null) => void;
-  setCategories: (cats: ICategory[]) => void;
+  hydrated:       boolean;
+  setAuth:        (auth: IAuth) => void;
+  unsetAuth:      () => void;
+  setUser:        (user: IAdminProfile | null) => void;
+  setAuthor:      (author: IAuthor | null) => void;
+  setCategories:  (cats: ICategory[]) => void;
+  setAuthorName:  (name: string) => void;
 }
 
 const store = createContext<StoreContext | null>(null);
@@ -62,8 +68,16 @@ export function StoreProvider({ children }: PropsWithChildren) {
     setState((p) => ({ ...p, user }));
   }, []);
 
+  const setAuthor = useCallback((author: IAuthor | null) => {
+    setState((p) => ({ ...p, author }));
+  }, []);
+
   const setCategories = useCallback((cats: ICategory[]) => {
     setState((p) => ({ ...p, categories: cats }));
+  }, []);
+
+  const setAuthorName = useCallback((name: string) => {
+    setState((p) => ({ ...p, authorName: name }));
   }, []);
 
   // Auto-logout when refresh token has expired
@@ -79,9 +93,9 @@ export function StoreProvider({ children }: PropsWithChildren) {
     try {
       const authRaw = localStorage.getItem(STORAGE_KEYS.AUTH);
       const userRaw = localStorage.getItem(STORAGE_KEYS.USER);
-      const auth    = authRaw ? parseJson<IAuth>(authRaw)               : null;
-      const user    = userRaw ? parseJson<IAdminProfile>(userRaw)       : null;
-      setState({ auth, user, categories: [] });
+      const auth    = authRaw ? parseJson<IAuth>(authRaw)         : null;
+      const user    = userRaw ? parseJson<IAdminProfile>(userRaw) : null;
+      setState({ auth, user, author: null, categories: [], authorName: '' });
     } catch (error) {
       console.error("Error loading from storage:", error);
     } finally {
@@ -90,7 +104,7 @@ export function StoreProvider({ children }: PropsWithChildren) {
   }, []);
 
   return (
-    <store.Provider value={{ ...state, hydrated, setAuth, unsetAuth, setUser, setCategories }}>
+    <store.Provider value={{ ...state, hydrated, setAuth, unsetAuth, setUser, setAuthor, setCategories, setAuthorName }}>
       {children}
     </store.Provider>
   );

@@ -26,7 +26,7 @@ function mimeToLabel(type: string): string {
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 interface MediaPickerModalProps {
-  onSelect: (src: string, alt: string) => void;
+  onSelect: (media: Pick<IMedia, '_id' | 'url' | 'name'>) => void;
   onClose:  () => void;
 }
 
@@ -78,7 +78,7 @@ export function MediaPickerModal({ onSelect, onClose }: MediaPickerModalProps) {
   // ── Select ────────────────────────────────────────────────────────────────
 
   function handleSelect(item: IMedia) {
-    onSelect(item.url, item.name.replace(/\.[^.]+$/, ''));
+    onSelect({ _id: item._id, url: item.url, name: item.name });
     onClose();
   }
 

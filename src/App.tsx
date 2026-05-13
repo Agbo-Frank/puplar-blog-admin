@@ -1,4 +1,5 @@
 import { Routes, Route, Navigate } from "react-router";
+import { Toaster } from "sonner";
 import { useStore } from "@/hooks/use-store";
 import DashboardLayout from "./components/layout/dashboard";
 import LoginPage from "./pages/login/index";
@@ -9,6 +10,7 @@ import EditorPage from "./pages/posts/editor";
 import MediaPage from "./pages/media/index";
 import TaxonomyPage from "./pages/taxonomy/index";
 import SchedulePage from "./pages/schedule/index";
+import SettingsPage from "./pages/settings/index";
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const { auth, hydrated } = useStore();
@@ -19,6 +21,12 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return (
+    <>
+    <Toaster
+      position="bottom-right"
+      richColors
+      toastOptions={{ style: { fontFamily: 'inherit', fontSize: '13px' } }}
+    />
     <Routes>
       <Route path="/login" element={<LoginPage />} />
 
@@ -38,7 +46,9 @@ export default function App() {
         <Route path="/media"       element={<MediaPage />} />
         <Route path="/taxonomy"    element={<TaxonomyPage />} />
         <Route path="/schedule"    element={<SchedulePage />} />
+        <Route path="/settings"    element={<SettingsPage />} />
       </Route>
     </Routes>
+    </>
   );
 }

@@ -6,10 +6,11 @@ import Placeholder from '@tiptap/extension-placeholder';
 import Image from '@tiptap/extension-image';
 import { Ic } from '../../../components/icons';
 import { Button, StatusPill } from '../../../components/material';
-import { useApi, useCategories, useMutation } from '@/hooks/use-api';
+import { useApi, useAuthor, useCategories, useMutation } from '@/hooks/use-api';
 import { endpoints } from '@/api/endpoints';
 import type {
   IPost,
+  IMedia,
   PostStatus,
   IEditHistoryEntry,
   CreatePostPayload,
@@ -48,14 +49,21 @@ export default function EditorPage() {
     extensions: [
       StarterKit,
       Placeholder.configure({ placeholder: 'Write something, or type / to insert a block…' }),
-      Image.configure({ inline: false, allowBase64: true }),
+      Image.configure({
+        inline: false,
+        allowBase64: true,
+        resize: {
+          enabled: true,
+          directions: ['bottom-right', 'bottom-left', 'top-right', 'top-left'],
+          minWidth: 120,
+          alwaysPreserveAspectRatio: true,
+        },
+      }),
     ],
     content: undefined,
     editorProps: { attributes: { class: 'outline-none' } },
     onUpdate: () => setTick((t) => t + 1),
   });
-
-  // ── Form state ────────────────────────────────────────────────────────────
 
   const [title, setTitle] = useState('');
   const [excerpt, setExcerpt] = useState('');
@@ -64,9 +72,15 @@ export default function EditorPage() {
   const [tags, setTags] = useState<string[]>([]);
   const [slug, setSlug] = useState('');
   const [scheduledAt, setScheduledAt] = useState('');
+  const [featuredImage, setFeaturedImage] = useState<Pick<IMedia, '_id' | 'url' | 'name'> | null>(null);
   const [postId, setPostId] = useState(id ?? '');
 
   const { categories } = useCategories();
+  const { author } = useAuthor();
+  const canPublish = !!(
+    author?.permissions?.includes('*') ||
+    author?.permissions?.includes('posts.publish')
+  );
 
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [version, setVersion] = useState(1);
@@ -77,12 +91,14 @@ export default function EditorPage() {
 
   // Prevents auto-save from firing right after seeding from the API response
   const suppressAutoSave = useRef(false);
+  const suppressFeaturedImageSave = useRef(false);
   const seeded = useRef(false);
 
   useEffect(() => {
     if (!loadedPost || !editor || seeded.current) return;
     seeded.current = true;
     suppressAutoSave.current = true;
+    suppressFeaturedImageSave.current = true;
 
     editor.commands.setContent(loadedPost.content as object);
     setTitle(loadedPost.title);
@@ -90,33 +106,30 @@ export default function EditorPage() {
     setStatus(loadedPost.status);
     setCategory(loadedPost.category);
     setTags(loadedPost.tags);
-    setSlug(loadedPost.slug);
+    const cleanedSlug = (loadedPost.slug ?? '')
+      .replace(/[^a-z0-9-]/g, '')
+      .replace(/-{2,}/g, '-')
+      .replace(/^-|-$/g, '');
+    setSlug(cleanedSlug || slugify(loadedPost.title));
     if (loadedPost.scheduled_at) setScheduledAt(loadedPost.scheduled_at.slice(0, 16));
+    if (loadedPost.featured_image) setFeaturedImage(loadedPost.featured_image);
     setSavedAt(Date.now());
-    setDataReady(true); // ← triggers EditorCanvas to remount with correct initial values
+    setDataReady(true);
   }, [loadedPost, editor]);
-
-  // ── Auto-slugify title for new posts ──────────────────────────────────────
 
   useEffect(() => {
     if (isNew) setSlug(slugify(title));
   }, [title, isNew]);
-
-  // ── Re-render "Saved Xs ago" every 10s ────────────────────────────────────
 
   useEffect(() => {
     const timer = setInterval(() => setTimeTick((t) => t + 1), 10_000);
     return () => clearInterval(timer);
   }, []);
 
-  // ── Word count ────────────────────────────────────────────────────────────
-
   const wordCount = useMemo(() => {
     const text = [title, excerpt, editor?.getText() ?? ''].join(' ').trim();
     return text ? text.split(/\s+/).length : 0;
   }, [tick, title, excerpt]);
-
-  // ── Mutations ─────────────────────────────────────────────────────────────
 
   const { trigger: createPost, isLoading: creating } = useMutation<IPost, CreatePostPayload>(
     endpoints.posts,
@@ -167,12 +180,14 @@ export default function EditorPage() {
       category,
       tags,
       slug: slug || undefined,
+      featured_image: featuredImage?._id ?? null,
     };
   }
 
   async function savePost() {
     if (!title.trim() || !category) return;
     const payload = buildPayload();
+    console.log(payload);
 
     if (!postId) {
       await createPost(payload as CreatePostPayload);
@@ -197,7 +212,26 @@ export default function EditorPage() {
     saveTimer.current = setTimeout(() => { void savePost(); }, 2000);
     return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tick, title, excerpt, category, tags, slug]);
+  }, [
+    tick,
+    featuredImage?.url,
+    title,
+    excerpt,
+    category,
+    tags,
+    slug,
+  ]);
+
+  // Immediate save when the featured image is deliberately set or cleared
+  useEffect(() => {
+    if (!postId || !title.trim() || !category) return;
+    if (suppressFeaturedImageSave.current) {
+      suppressFeaturedImageSave.current = false;
+      return;
+    }
+    void savePost();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [featuredImage]);
 
   async function handleStatusChange(s: PostStatus) {
     const currentId = postId;
@@ -257,23 +291,39 @@ export default function EditorPage() {
               {creating ? 'Saving…' : 'Save draft'}
             </button>
           )}
-          <Button
-            disabled={transitioning || (!postId && (!title.trim() || !category))}
-            onClick={() => void handleStatusChange('published')}
-            loading={transitioning}
-            className='text-[12px] px-2.5 py-1 rounded-md text-stone-700 border-stone-200 hover:bg-stone-50 transition disabled:opacity-40 disabled:cursor-not-allowed'
-            variant='secondary'
-          >
-            Request review
-          </Button>
-          <Button
-            disabled={transitioning || (!postId && (!title.trim() || !category))}
-            onClick={() => void handleStatusChange('published')}
-            loading={transitioning}
-            className='text-[12px] px-3 py-1 rounded-md'
-          >
-            <Ic.Bolt className="w-3 h-3" /> Request review
-          </Button>
+          {status === 'draft' && (
+            <Button
+              disabled={transitioning || (!postId && (!title.trim() || !category))}
+              onClick={() => void handleStatusChange('review')}
+              loading={transitioning}
+              className='text-[12px] px-2.5 py-1 rounded-md text-stone-700 border-stone-200 hover:bg-stone-50 transition disabled:opacity-40 disabled:cursor-not-allowed'
+              variant='secondary'
+            >
+              Request review
+            </Button>
+          )}
+          {status === 'published' ? (
+            <Button
+              disabled={!canPublish || transitioning}
+              onClick={() => void handleStatusChange('draft')}
+              loading={transitioning}
+              className='text-[12px] px-2.5 py-1 rounded-md text-stone-700 border-stone-200 hover:bg-stone-50 transition disabled:opacity-40 disabled:cursor-not-allowed'
+              variant='secondary'
+              title={!canPublish ? 'You don\'t have permission to unpublish' : undefined}
+            >
+              Unpublish
+            </Button>
+          ) : (
+            <Button
+              disabled={!canPublish || transitioning || (!postId && (!title.trim() || !category))}
+              onClick={() => void handleStatusChange('published')}
+              loading={transitioning}
+              className='text-[12px] px-3 py-1 rounded-md'
+              title={!canPublish ? 'You don\'t have permission to publish' : undefined}
+            >
+              <Ic.Bolt className="w-3 h-3" /> Publish
+            </Button>
+          )}
         </div>
       </div>
 
@@ -298,13 +348,16 @@ export default function EditorPage() {
           category={category}
           tags={tags}
           slug={slug}
+          publishedAt={loadedPost?.published_at || null}
           scheduledAt={scheduledAt}
           history={history}
+          featuredImage={featuredImage}
           onStatusChange={(s) => void handleStatusChange(s)}
           onCategoryChange={setCategory}
           onTagsChange={setTags}
           onSlugChange={setSlug}
           onScheduledAtChange={setScheduledAt}
+          onFeaturedImageChange={setFeaturedImage}
         />
       </div>
 
